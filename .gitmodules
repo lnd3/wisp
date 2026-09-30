@@ -1,0 +1,3 @@
+[submodule "deps/lplan"]
+	path = deps/lplan
+	url = https://github.com/lnd3/lplan
