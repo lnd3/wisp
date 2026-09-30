@@ -4,9 +4,10 @@
 # current committed HEAD (git archive — only tracked, committed files,
 # nothing stray from this machine's own working tree), rsync that
 # snapshot over SSH into the server's pre-deployment build folder, then
-# trigger the build+restart there. No container registry — the one
-# image here (`caddy:2`) is pulled directly, nothing to build at all
-# yet, same as EphemNet's own ephemnet-caddy service.
+# trigger the build+restart there. No container registry — the wisp
+# image builds from source on the server (deploy/wisp/Dockerfile), and
+# wisp-caddy's `caddy:2` is pulled directly, same as EphemNet's own
+# ephemnetd/ephemnet-caddy pair.
 #
 # Copied and adapted from persona's own (itself from cinder's/EphemNet's)
 # deploy/deploy.sh (same server, `bh2`, same convention).
@@ -106,14 +107,16 @@ envsubst "$BUILD_INFO_VARS" <"$STAGING/site/index.html" >"$STAGING/site/index.ht
 
 echo "==> Syncing to ${DEPLOY_SSH_TARGET}:${DEPLOY_REMOTE_PATH} ..."
 # --delete keeps the remote folder an exact mirror of this commit — but
-# deploy/.env lives only on the server (real domain, never committed)
+# deploy/.env (real domain) and deploy/products.json (the product
+# registry's token hashes) live only on the server, are never committed,
 # and must survive every sync: excluded explicitly so --delete never
-# touches it.
+# touches them.
 rsync -az --delete \
 	--exclude 'deploy/.env' \
+	--exclude 'deploy/products.json' \
 	"$STAGING"/ "${DEPLOY_SSH_TARGET}:${DEPLOY_REMOTE_PATH}/"
 
-echo "==> Starting on the server..."
+echo "==> Building and starting on the server..."
 # shellcheck disable=SC2029  # DEPLOY_REMOTE_PATH is ours to expand locally, not the remote's
 ssh "$DEPLOY_SSH_TARGET" bash -s <<EOF
 set -euo pipefail
@@ -122,8 +125,17 @@ if [ ! -f deploy/.env ]; then
 	echo "ERROR: deploy/.env is missing on the server — see deploy/README.md's one-time setup (WISP_DOMAIN is required)." >&2
 	exit 1
 fi
+if [ ! -f deploy/products.json ]; then
+	echo "ERROR: deploy/products.json is missing on the server — see deploy/README.md's product registry setup." >&2
+	exit 1
+fi
+docker compose -p $COMPOSE_PROJECT -f deploy/docker-compose.yml build wisp
 docker compose -p $COMPOSE_PROJECT -f deploy/docker-compose.yml up -d
 docker image prune -f
+# Build cache is never pruned otherwise — see cinder's deploy.sh for the
+# real "disk 80% full" incident. Never touches running containers or
+# volumes.
+docker builder prune -a -f
 docker compose -p $COMPOSE_PROJECT -f deploy/docker-compose.yml ps
 EOF
 

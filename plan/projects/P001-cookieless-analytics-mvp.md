@@ -89,9 +89,11 @@ full technical design.
       column-store like ClickHouse until scale actually demands it)
 
 ### Phase 2 — Ingest API + product integration
-- [ ] Ingest API (unique events + aggregated event data)
-- [ ] Product registry: product key + auth token per product (hash-only
-      at wisp, server-only file excluded from deploy rsync; D002)
+- [x] Ingest API (`internal/ingest`, `cmd/wisp serve`): auth, validation,
+      merge into per-product-day staging (`internal/staging`), dedup
+- [x] Product registry: product key + auth token per product (hash-only
+      at wisp, server-only `deploy/products.json` excluded from deploy
+      rsync; `internal/registry`, `wisp hash-token`)
 - [x] `hook` package (D002 §1b): `Start`/`View`/`Download`/`Close`
       and the interval dispatcher. Stdlib-only Go (`hook/`).
 - [ ] Wire the hook into a first real product (TBD — persona's landing
@@ -99,6 +101,9 @@ full technical design.
 - [ ] Bot/crawler filtering (likely product-side now, before aggregation)
 
 ### Phase 3 — Storage, rollups, dashboard
+- [ ] Day close + product statistics DB (D002 §4–5) — **needed before a
+      real product is wired in**: until it exists the sweep deletes each
+      day's staging unaggregated
 - [ ] Events schema + rollup jobs
 - [ ] Dashboard UI
 

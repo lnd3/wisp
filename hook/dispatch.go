@@ -84,7 +84,7 @@ func (h *Hook) enqueueLocked(d *dayState) {
 			day:      b.Day,
 			id:       b.BatchID,
 			body:     body,
-			deadline: d.start.Add(closeDeadline),
+			deadline: d.start.Add(DayCloseAfter),
 		})
 	}
 	for len(h.queue) > h.cfg.MaxQueuedBatches {

@@ -11,8 +11,10 @@
   `deploy/`, adapted from persona/EphemNet/cinder, with ports and
   subnet checked live on `bh2`. It serves a placeholder page until an
   ingest API exists.
-- **`hook/` is implemented** (D002 §1b), tested but not yet used by
-  any product. There's no ingest API to receive its batches yet.
+- **Hook and ingest API are implemented** (D002 §1b–§3): `hook/`,
+  `cmd/wisp`, `internal/{ingest,registry,staging}`, and the `wisp`
+  service in `deploy/`. Not yet deployed (DNS). No product is wired
+  in yet.
 - **D001's revision to backend-only ingest.** Products' servers send
   unique events or (preferably) aggregates. No browser ever talks to
   wisp.
@@ -34,13 +36,12 @@
 
 ## Next
 
-1. Get the `wisp.mera.network` zone entry added (EphemNet side). Then
-   run `deploy/configure-nginx.sh bh2 /opt/wisp live` and
-   `deploy/deploy.sh bh2 /opt/wisp live`, then the privacy log check.
-2. Review D002 (the full data model): settle key fields, salt scope
-   and the restart behaviour, and confirm or adjust its proposed
-   defaults.
-3. Revisit build-vs-adopt. Backend-only aggregate ingest fits
-   GoatCounter/Plausible less well than the original snippet design
-   did, which likely favours building.
-4. Choose storage (SQLite/Postgres).
+1. **Day close + product statistics DB (D002 §4–5).** Until it exists,
+   the sweep discards each day's staging unaggregated, so no real
+   product should be wired in before it lands.
+2. Get the `wisp.mera.network` zone entry (EphemNet side). Then:
+   configure-nginx, create `products.json`, deploy, and run the
+   privacy log check.
+3. Wire the hook into a first product (persona is the smallest).
+4. Settle D002's open questions: key fields beyond IP+UA, salt scope,
+   restart behaviour, and the proposed values.

@@ -516,6 +516,44 @@ N/A. Greenfield.
 
 ## Log
 
+2026-09-30 (later) — **§2–§3 implemented**: the ingest API
+(`internal/ingest`), the registry (`internal/registry`), staging
+(`internal/staging`), and the `cmd/wisp` binary (`serve`,
+`hash-token`), wired into `deploy/`. Tests cover the handler, registry
+and staging, plus the real hook → handler end to end. Also verified:
+the binary and the Docker image, with ingest, dedup, 401 and graceful
+stop. Decisions beyond the text above:
+- **Auth before body:** the token is looked up by its SHA-256 (tokens
+  are 256-bit random, so the map-lookup timing reveals nothing).
+  Unauthenticated requests are refused without reading the body. A
+  body whose `product` differs from the token's product gets the same
+  `401`.
+- **Validation:**
+  - Unknown JSON fields are rejected, and bodies are capped at 16 MiB.
+  - Visitor keys must be exactly 22 base64url characters.
+  - A visitor must carry at least one view or download; otherwise it
+    would inflate uniques.
+  - Page keys follow `hook.ValidPageKey`.
+  - Referrers must be bare hosts, at most 100 per visitor.
+  - Agent fields must match `[a-z0-9]{1,32}`, so a full User-Agent
+    can't be smuggled in.
+  - The day must be open, with up to 10 min of future clock skew.
+- **Staging files** are 0600 in 0700 directories. They use
+  `secure_delete=ON` and the rollback journal (not WAL), so all keyed
+  data sits in one file plus a transient `-journal`. `Delete` removes
+  every side file. Product key and date are re-validated before
+  becoming path segments.
+- **Sweep, the interim behaviour:** it runs at startup and every 10
+  min, deleting any staging file past day start + 26h. The day close
+  (§4) doesn't exist yet, so **those days are discarded unaggregated**.
+  That's deliberate: keys must not outlive their day. It's why §4–5
+  must land before a real product is wired in.
+- **Deploy:** `wisp` runs on an `internal: true` network (no egress).
+  `wisp-caddy` routes `/v1/*` to it. The registry is a server-only
+  `deploy/products.json`. The SQLite driver is `modernc.org/sqlite`
+  v1.34.5 (pure Go, as cinder and offgrid use); newer releases require
+  Go ≥ 1.24–1.26.
+
 2026-09-30 (later) — **§1b implemented** in `hook/` (module
 `github.com/lnd3/wisp`, `go 1.23`, so it builds locally and is
 importable by the products' 1.24+). 95% statement coverage, race

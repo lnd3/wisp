@@ -52,10 +52,15 @@
 			disable_tlsalpn_challenge
 		}
 	}
-	# Placeholder landing page until the wisp service exists — then
-	# replace with `reverse_proxy wisp:8080` (see docker-compose.yml).
-	root * /srv/site
-	file_server
+	# The ingest API (and later the dashboard API). `wisp` is the app's
+	# DNS name on the internal-only wisp-internal network.
+	handle /v1/* {
+		reverse_proxy wisp:8080
+	}
+	handle {
+		root * /srv/site
+		file_server
+	}
 }
 
 # Explicit http->https redirect — `auto_https disable_redirects` above

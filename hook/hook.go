@@ -25,11 +25,14 @@ const (
 	maxPagesPerVisitor  = 500
 	maxVisitorsPerBatch = 10_000
 	maxReferrerLen      = 253
-	// A day's batches are accepted until 24h after the day ends plus a 2h
-	// grace, i.e. 26h after the day starts. Later ones would get 409.
-	closeDeadline = 26 * time.Hour
-	maxBackoff    = time.Hour
+	maxBackoff          = time.Hour
 )
+
+// DayCloseAfter is how long after a UTC day starts wisp keeps accepting
+// batches for it: the day's 24h plus a 2h grace. Past it, wisp answers
+// 409 and has deleted that day's keyed data. Shared by the hook and the
+// ingest API as part of the wire contract.
+const DayCloseAfter = 26 * time.Hour
 
 var (
 	// ErrInvalidPageKey: a page key wasn't a route template — empty, not
@@ -266,7 +269,7 @@ func (h *Hook) observeLocked(now time.Time, kind, pageKey, ua, ipRaw, ref string
 		return nil
 	}
 	date := now.Format(time.DateOnly)
-	if !validPageKey(pageKey) {
+	if !ValidPageKey(pageKey) {
 		h.stats.Rejected++
 		return h.warnOnceLocked(ErrInvalidPageKey, date)
 	}
@@ -393,9 +396,11 @@ func (h *Hook) report(err error) {
 	}
 }
 
-// validPageKey accepts route templates: "/"-rooted, at most 256 bytes,
-// no query string, fragment, whitespace or control characters.
-func validPageKey(k string) bool {
+// ValidPageKey reports whether k is an acceptable page key: a route
+// template, "/"-rooted, at most 256 bytes, with no query string,
+// fragment, whitespace or control characters. The ingest API applies the
+// same rule.
+func ValidPageKey(k string) bool {
 	if k == "" || len(k) > maxPageKeyLen || k[0] != '/' {
 		return false
 	}

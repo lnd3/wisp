@@ -6,11 +6,9 @@
 # deploy/environments.sh) so "live" and "dev" never collide with each
 # other or with any other product's stack on the same host.
 #
-# Scoped to what this repo has today: a static placeholder page
-# (site/), no wisp binary yet. When the ingest API/dashboard exists, it joins
-# wisp-edge's sibling network (see the commented-out `wisp` service
-# below) and wisp-caddy reverse-proxies to it; nginx/DNS/TLS need no
-# change for that.
+# Two services: wisp (the ingest API, cmd/wisp) on an internal-only
+# network, and wisp-caddy, which terminates TLS, reverse-proxies /v1/* to
+# wisp and serves the static site/ page for everything else.
 #
 # Ports and subnet checked LIVE against `bh2` on 2026-09-30 (docker ps,
 # docker network ls, ss -tln), not just inferred from other repos'
@@ -48,26 +46,34 @@ services:
       - "127.0.0.1:${WISP_CADDY_HTTP_PORT:-9220}:80"
     networks:
       - wisp-edge
+      - wisp-internal
     # Caddy's stderr is kept by Docker's json-file driver on the host —
     # a persisted log. The Caddyfile's global `log` block keeps request
     # details (and so client IPs) out of it; see that file's header.
     restart: unless-stopped
 
-  # The wisp ingest API/dashboard, once it exists — uncomment and point
-  # wisp-caddy's site block at it (`reverse_proxy wisp:8080`). No host
-  # port: only wisp-caddy can reach it. Its callers are the products'
-  # own backends (server-to-server, authenticated per product), never
-  # end users' browsers — see P001's 2026-09-30 Log — so the peer
-  # address it sees is a product server's, not a visitor's.
-  # wisp:
-  #   build:
-  #     context: ..
-  #     dockerfile: deploy/wisp/Dockerfile
-  #   volumes:
-  #     - wisp-data:/data
-  #   networks:
-  #     - wisp-internal
-  #   restart: unless-stopped
+  # The wisp server (cmd/wisp): the ingest API product hooks POST to
+  # (/v1/ingest, reverse-proxied by wisp-caddy), plus the staging sweep.
+  # No host port: only wisp-caddy can reach it. Its callers are the
+  # products' own backends (server-to-server, authenticated per product),
+  # never end users' browsers (plan/concepts/C001), so the peer address
+  # it sees is a product server's, not a visitor's — and it logs none.
+  wisp:
+    build:
+      context: ..
+      dockerfile: deploy/wisp/Dockerfile
+    volumes:
+      # Server-only registry of product keys + token hashes (see
+      # deploy/products.json.example and deploy/README.md). Excluded from
+      # deploy.sh's rsync, like deploy/.env. After editing it, restart
+      # wisp (ops.sh ... restart wisp).
+      - ./products.json:/etc/wisp/products.json:ro
+      # Staging files (keyed, day-scoped, deleted at close) and, later,
+      # the product statistics DB.
+      - wisp-data:/data
+    networks:
+      - wisp-internal
+    restart: unless-stopped
 
 networks:
   # Deliberately just {wisp-caddy} — nothing else ever joins it. Not
@@ -76,12 +82,12 @@ networks:
     ipam:
       config:
         - subnet: ${WISP_EDGE_SUBNET:-172.27.1.0/24}
-  # For the future wisp service above: {wisp-caddy, wisp} only, so the
-  # app never sits on the edge network. Add wisp-caddy to it when the
-  # wisp service is uncommented.
-  # wisp-internal: {}
+  # {wisp-caddy, wisp} only, so the app never sits on the edge network.
+  # internal: true — wisp itself needs no outbound internet access at all.
+  wisp-internal:
+    internal: true
 
 volumes:
   wisp-caddy-data:
   wisp-caddy-config:
-  # wisp-data:
+  wisp-data:

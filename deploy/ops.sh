@@ -14,7 +14,7 @@ source deploy/environments.sh
 
 usage() {
 	cat >&2 <<EOF
-Usage: $0 <ssh-target> <deploy-root> <environment> <command>
+Usage: $0 <ssh-target> <deploy-root> <environment> <command> [service]
 
   <ssh-target> <deploy-root> <environment>   same meaning as deploy.sh's
                                 own arguments — the actual remote path
@@ -23,16 +23,17 @@ Usage: $0 <ssh-target> <deploy-root> <environment> <command>
                                 $VALID_ENVIRONMENTS
 
 Commands:
-  status     docker compose ps
-  logs       follow logs
-  start      docker compose up -d — starts an already-pulled image; use deploy.sh to sync new site content
-  stop       docker compose stop — container kept, not removed
-  restart    restart wisp-caddy
-  down       stop and remove the container — volumes persist (cert data survives this)
+  status              docker compose ps
+  logs [service]      follow logs (all, or one of: wisp, wisp-caddy)
+  start               docker compose up -d — starts already-built images; use deploy.sh to ship new code
+  stop                docker compose stop — containers kept, not removed
+  restart [service]   restart everything, or one service (e.g. wisp after editing deploy/products.json)
+  down                stop and remove containers — volumes persist (certs and wisp-data survive this)
 
 Examples:
   $0 deploy@203.0.113.9 /opt/wisp live status
   $0 deploy@203.0.113.9 /opt/wisp live logs
+  $0 deploy@203.0.113.9 /opt/wisp live restart wisp
   $0 deploy@203.0.113.9 /opt/wisp dev restart
 EOF
 	exit 1
@@ -43,6 +44,15 @@ DEPLOY_SSH_TARGET="$1"
 DEPLOY_ROOT="$2"
 ENVIRONMENT="$3"
 COMMAND="$4"
+SERVICE="${5:-}"
+# A closed set: SERVICE is interpolated into a remote shell command.
+case "$SERVICE" in
+"" | wisp | wisp-caddy) ;;
+*)
+	echo "ERROR: unknown service '$SERVICE' — must be wisp or wisp-caddy" >&2
+	exit 1
+	;;
+esac
 
 validate_environment "$ENVIRONMENT"
 DEPLOY_REMOTE_PATH="$DEPLOY_ROOT/$ENVIRONMENT"
@@ -63,7 +73,7 @@ status)
 	run_remote "$COMPOSE ps"
 	;;
 logs)
-	ssh -t "$DEPLOY_SSH_TARGET" "cd '$DEPLOY_REMOTE_PATH' && $COMPOSE logs -f --tail 200"
+	ssh -t "$DEPLOY_SSH_TARGET" "cd '$DEPLOY_REMOTE_PATH' && $COMPOSE logs -f --tail 200 $SERVICE"
 	;;
 start | up)
 	run_remote "$COMPOSE up -d"
@@ -72,7 +82,7 @@ stop)
 	run_remote "$COMPOSE stop"
 	;;
 restart)
-	run_remote "$COMPOSE restart"
+	run_remote "$COMPOSE restart $SERVICE"
 	;;
 down)
 	run_remote "$COMPOSE down"

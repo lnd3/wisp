@@ -1,3 +1,4 @@
 /deploy/.env
 /plan/.plan-server.pid
 /plan/.plan-server.log
+/deploy/products.json

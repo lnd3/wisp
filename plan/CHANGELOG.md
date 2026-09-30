@@ -14,3 +14,4 @@ Format: `YYYY-MM-DD | ID | old_status → new_status | note`
 2026-09-30 | D002 | PLANNING → PLANNING | Per-product credentials: product key + auth token; wisp keeps token hashes only in a server-side registry
 2026-09-30 | C001 | NEW → STABLE | No visitor-side third-party requests: portfolio-wide rule behind backend-only ingest (user's stated rationale)
 2026-09-30 | D002 | PLANNING → PLANNING | hook package (§1b) implemented in hook/ — tested, not yet adopted by a product; ingest API still to build
+2026-09-30 | D002 | PLANNING → PLANNING | Ingest API implemented (cmd/wisp, internal/{ingest,registry,staging}) and wired into deploy/; interim sweep discards unaggregated days until the day close (§4–5) exists

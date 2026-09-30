@@ -1,0 +1,8 @@
+{
+  "products": [
+    {
+      "key": "cindernote",
+      "token_sha256": ["<output of: echo \"$TOKEN\" | wisp hash-token>"]
+    }
+  ]
+}
