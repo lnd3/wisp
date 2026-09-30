@@ -1,0 +1,87 @@
+# Production compose stack for wisp (wisp.mera.network) — copied and
+# adapted from persona's own deploy/docker-compose.yml, itself from
+# EphemNet's/cinder's (same server, `bh2`, same convention — cinder's
+# D007/P008). Never invoked directly — always via deploy/ops.sh or
+# deploy/deploy.sh, which pass `-p wisp-<environment>` (see
+# deploy/environments.sh) so "live" and "dev" never collide with each
+# other or with any other product's stack on the same host.
+#
+# Scoped to what this repo has today: a static placeholder page
+# (site/), no wisp binary yet. When the ingest API/dashboard exists, it joins
+# wisp-edge's sibling network (see the commented-out `wisp` service
+# below) and wisp-caddy reverse-proxies to it; nginx/DNS/TLS need no
+# change for that.
+#
+# Ports and subnet checked LIVE against `bh2` on 2026-09-30 (docker ps,
+# docker network ls, ss -tln), not just inferred from other repos'
+# docs. Taken at that check: 9180-9184/9443-9447 (cinder live),
+# 9190/9450 (EphemNet), 9200/9460 (offgridapp), 9210/9470 (persona).
+# wisp takes the next free pair, 9220/9480 (live), 9320/9580 (dev).
+#
+# Subnet: 172.27.1.0/24 (live) / 172.27.2.0/24 (dev). Deliberately NOT
+# continuing persona's 172.32.x — 172.32.0.0/16 is outside RFC 1918's
+# 172.16.0.0/12 (i.e. real, public internet address space), so a
+# Docker network there shadows real hosts from inside the container.
+# 172.27.0.0/16 is private, unused on `bh2` at that check, and below
+# the 172.28-172.31 blocks cinder/EphemNet/offgridapp already pinned.
+#
+# LOCAL TESTING WARNING (same as EphemNet's): WISP_DOMAIN's real value
+# is live DNS pointed at `bh2`. Caddy requests a REAL Let's Encrypt
+# certificate the moment it starts — for a local dry run, set
+# WISP_DOMAIN to something that doesn't resolve (e.g. `wisp.invalid`).
+
+services:
+  wisp-caddy:
+    image: caddy:2
+    environment:
+      - WISP_DOMAIN=${WISP_DOMAIN:?set WISP_DOMAIN in deploy/.env}
+      - WISP_EDGE_SUBNET=${WISP_EDGE_SUBNET:-172.27.1.0/24}
+    volumes:
+      - ./wisp-caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ../site:/srv/site:ro
+      - wisp-caddy-data:/data
+      - wisp-caddy-config:/config
+    ports:
+      - "127.0.0.1:${WISP_CADDY_HTTPS_PORT:-9480}:443"
+      # HTTP-01 challenge port — see cinder's own D007 Log for why
+      # HTTP-01, not TLS-ALPN-01.
+      - "127.0.0.1:${WISP_CADDY_HTTP_PORT:-9220}:80"
+    networks:
+      - wisp-edge
+    # Caddy's stderr is kept by Docker's json-file driver on the host —
+    # a persisted log. The Caddyfile's global `log` block keeps request
+    # details (and so client IPs) out of it; see that file's header.
+    restart: unless-stopped
+
+  # The wisp ingest API/dashboard, once it exists — uncomment and point
+  # wisp-caddy's site block at it (`reverse_proxy wisp:8080`). No host
+  # port: only wisp-caddy can reach it. Its callers are the products'
+  # own backends (server-to-server, authenticated per product), never
+  # end users' browsers — see P001's 2026-09-30 Log — so the peer
+  # address it sees is a product server's, not a visitor's.
+  # wisp:
+  #   build:
+  #     context: ..
+  #     dockerfile: deploy/wisp/Dockerfile
+  #   volumes:
+  #     - wisp-data:/data
+  #   networks:
+  #     - wisp-internal
+  #   restart: unless-stopped
+
+networks:
+  # Deliberately just {wisp-caddy} — nothing else ever joins it. Not
+  # `internal: true`: Caddy needs outbound internet access for ACME.
+  wisp-edge:
+    ipam:
+      config:
+        - subnet: ${WISP_EDGE_SUBNET:-172.27.1.0/24}
+  # For the future wisp service above: {wisp-caddy, wisp} only, so the
+  # app never sits on the edge network. Add wisp-caddy to it when the
+  # wisp service is uncommented.
+  # wisp-internal: {}
+
+volumes:
+  wisp-caddy-data:
+  wisp-caddy-config:
+  # wisp-data:

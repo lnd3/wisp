@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>wisp</title>
+<style>
+  :root { color-scheme: light dark; --fg: #1c1c1e; --muted: #6e6e73; --bg: #fafaf8; }
+  @media (prefers-color-scheme: dark) { :root { --fg: #ececec; --muted: #9a9aa0; --bg: #141416; } }
+  body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: var(--bg); color: var(--fg);
+         font: 17px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 34rem; padding: 2rem 1rem; }
+  h1 { font-weight: 600; letter-spacing: -0.01em; margin: 0 0 .5rem; }
+  p { margin: 0 0 1rem; }
+  footer { margin-top: 2rem; color: var(--muted); font-size: 13px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>wisp</h1>
+  <p>Privacy-first analytics for our own products. Events and aggregates come from product backends, never from visitors’ browsers: no cookies, no stored IP addresses, no consent banner.</p>
+  <p>Not collecting anything yet.</p>
+  <footer>${WISP_BUILD_INFO}</footer>
+</main>
+</body>
+</html>

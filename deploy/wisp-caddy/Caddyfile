@@ -1,0 +1,67 @@
+# wisp's TLS-terminating sidecar — same shape as persona's/EphemNet's/
+# cinder's own Caddyfiles (cinder's D007 pattern): scoped listener
+# wrapper for PROXY protocol from nginx's shared stream{} passthrough,
+# HTTP-01-not-TLS-ALPN-01 ACME (see cinder's D007 Log for the real,
+# never-root-caused TLS-ALPN-01 failure on this server).
+#
+# The one wisp-specific difference: LOGGING. wisp's ingest API is
+# called by product backends, not end users, so visitor IPs shouldn't
+# reach this host at all — but a stray browser hit (someone opening the
+# URL, a misconfigured product embedding it client-side) would, and a
+# log line carrying `remote_ip` would then persist it. Defense in depth
+# for CLAUDE.md's "no raw IP persists anywhere" invariant:
+#   - No `log` directive in any site block: Caddy writes no access log
+#     unless asked (cinder's sidecars do ask, for monitor.sh's digest —
+#     never copy that here).
+#   - The global `log` block below drops the loggers whose entries
+#     embed the request (and so the client IP): handler errors
+#     (http.log.error — e.g. a 404/5xx from file_server or, later,
+#     reverse_proxy) and reverse_proxy's own upstream-failure logs.
+#     ACME/cert/TLS lifecycle logs are kept — they're what you need to
+#     debug a failed issuance, and carry no visitor data.
+#
+# {$WISP_DOMAIN}/{$WISP_EDGE_SUBNET} are Caddy's own env-var
+# substitution, passed through by docker-compose.yml from deploy/.env.
+{
+	auto_https disable_redirects
+
+	log default {
+		output stderr
+		exclude http.log.error http.handlers.reverse_proxy
+	}
+
+	# Scoped to :443 only — an unscoped block would also wrap the
+	# auto-created :80 HTTP-01 listener in TLS, breaking it.
+	servers :443 {
+		listener_wrappers {
+			# `allow` must match wisp-edge's own subnet in
+			# deploy/docker-compose.yml — the only network nginx can
+			# reach this container from.
+			proxy_protocol {
+				timeout 2s
+				allow {$WISP_EDGE_SUBNET}
+			}
+			tls
+		}
+	}
+}
+
+{$WISP_DOMAIN} {
+	tls {
+		issuer acme {
+			disable_tlsalpn_challenge
+		}
+	}
+	# Placeholder landing page until the wisp service exists — then
+	# replace with `reverse_proxy wisp:8080` (see docker-compose.yml).
+	root * /srv/site
+	file_server
+}
+
+# Explicit http->https redirect — `auto_https disable_redirects` above
+# only disables Caddy's automatic one (the gap persona/EphemNet found
+# live 2026-09-30). Caddy's ACME HTTP-01 responder on :80 stays active
+# independent of this block, so renewals are unaffected.
+http://{$WISP_DOMAIN} {
+	redir https://{host}{uri} permanent
+}

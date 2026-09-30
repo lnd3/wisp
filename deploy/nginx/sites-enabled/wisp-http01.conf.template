@@ -1,0 +1,33 @@
+# wisp's own HTTP-01 vhost fragment — same as persona's/cinder's (see
+# cinder's D007 for why ACME uses HTTP-01 on this server). Routes plain
+# port 80 for WISP_DOMAIN to wisp-caddy's own :80 listener, which
+# answers ACME challenges and redirects everything else to https.
+#
+# Installed at /etc/nginx/sites-enabled/wisp-<environment>-http01.conf
+# by deploy/configure-nginx.sh. .template: rendered with envsubst,
+# restricted to exactly the placeholders below (never nginx's own
+# `$host` etc.).
+
+server {
+	listen 80;
+	server_name ${WISP_DOMAIN};
+
+	# wisp-specific, NOT in persona's/cinder's copies: Debian's stock
+	# nginx.conf turns on `access_log /var/log/nginx/access.log` for the
+	# whole http{} block, which would persist every plain-http visitor's
+	# raw IP (the redirect traffic, not just ACME) — a direct violation
+	# of CLAUDE.md's "no raw IP persists anywhere" invariant. Off for
+	# this vhost. nginx's error log also tags entries with `client: <ip>`
+	# (e.g. an upstream failure when wisp-caddy is down), so this vhost's
+	# error_log is raised to `crit` — config problems still surface via
+	# `nginx -t`, which doesn't depend on this.
+	access_log off;
+	error_log /var/log/nginx/error.log crit;
+
+	location / {
+		# Without this, nginx forwards the upstream's address as Host
+		# and Caddy has no matching site block (found live on cinder).
+		proxy_set_header Host $host;
+		proxy_pass http://127.0.0.1:${WISP_CADDY_HTTP_PORT};
+	}
+}

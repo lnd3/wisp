@@ -1,0 +1,13 @@
+# wisp's own nginx stream-backend entry — see cinder's deploy/README.md
+# "MULTI-REPO OWNERSHIP" note. This repo owns and ships exactly this
+# file; it must never gain another repo's hostname lines.
+#
+# Must be installed for WISP_DOMAIN to reach wisp at all: the shared
+# skeleton's `default` backend is EphemNet's relay-proxy, so an
+# unmatched wisp.mera.network would silently land there instead.
+#
+# Port must match deploy/docker-compose.yml's published wisp-caddy
+# HTTPS port. .template: rendered by deploy/configure-nginx.sh via
+# envsubst, restricted to exactly the placeholders below.
+
+${WISP_DOMAIN}   127.0.0.1:${WISP_CADDY_HTTPS_PORT};  # wisp-caddy
