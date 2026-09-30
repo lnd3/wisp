@@ -40,6 +40,15 @@ full technical design.
     starts as a single-owner, self-hosted tool
   - Real-time dashboards, custom event tracking beyond pageviews/
     downloads, A/B testing — later scope if wanted at all
+  - **Portfolio-wide service health monitoring + mobile push alerts** —
+    a real, undecided scope-expansion request from `EphemNet` (see
+    Log, 2026-09-30); not started, not designed, not committed to.
+    Distinct from this project's core web-analytics scope (this would
+    be actively polling/receiving health signals from other repos'
+    running services — `cinder`, `EphemNet`, etc. — and pushing to a
+    lightweight desktop/mobile app, not passive pageview counting) —
+    needs its own design decision on whether it belongs in `wisp` at
+    all or should be a separate project, before any build starts.
 
 ## Linked
 
@@ -79,3 +88,15 @@ the core design constraint (cookieless, no consent banner) is already
 decided, not still an open question — what remains is deciding build-
 vs-adopt and the concrete implementation, not whether the idea is worth
 pursuing at all.
+
+2026-09-30 (later) — Cross-repo request from `EphemNet`, surfaced while
+that project discussed its own deferred `deploy/monitor.sh` adaptation
+(email-only alerting, parked for lack of a working alert channel): the
+user's own framing was "monitor is nice, but it's even better with push
+to mobile device, which is always available... we should tell the new
+project wisp that will manage web site analytics. It should also
+collect service health across our portfolio." Recorded here as a real
+ask, not yet designed or scoped — see the new Scope bullet above.
+`EphemNet` itself has taken no dependency on this; its own
+`monitor.sh` task remains independently blocked on a real alert channel
+regardless of whether `wisp` ends up building this.
