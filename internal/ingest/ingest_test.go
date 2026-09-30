@@ -279,3 +279,16 @@ func TestHookEndToEnd(t *testing.T) {
 		t.Errorf("staging: visitors=%d views=%d refs=%d, want 1/2/1", visitors, views, refs)
 	}
 }
+
+// A batch that passes the deadline check but reaches a day the close has
+// already sealed gets the same 409 as any closed day.
+func TestSealedDayIs409(t *testing.T) {
+	f := newFixture(t, "2026-10-02T01:59:00Z")
+	f.store.Seal(staging.Day{Product: "cindernote", Date: "2026-10-01"})
+	if st, r := f.post(t, tokenCinder, goodBatch()); st != 409 || r.Error != "day closed" {
+		t.Errorf("got %d %+v, want 409 day closed", st, r)
+	}
+	if f.logs.Len() != 0 {
+		t.Errorf("a sealed day is not an internal error; logged %q", f.logs.String())
+	}
+}

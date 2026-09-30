@@ -11,10 +11,10 @@
   `deploy/`, adapted from persona/EphemNet/cinder, with ports and
   subnet checked live on `bh2`. It serves a placeholder page until an
   ingest API exists.
-- **Hook and ingest API are implemented** (D002 §1b–§3): `hook/`,
-  `cmd/wisp`, `internal/{ingest,registry,staging}`, and the `wisp`
-  service in `deploy/`. Not yet deployed (DNS). No product is wired
-  in yet.
+- **The whole ingest path is implemented** (D002 §1b–§5): the hook,
+  the ingest API, staging, the day close and the stats DB, plus the
+  `wisp` service in `deploy/`. Not yet deployed (DNS). No product is
+  wired in yet. The dashboard isn't built.
 - **D001's revision to backend-only ingest.** Products' servers send
   unique events or (preferably) aggregates. No browser ever talks to
   wisp.
@@ -36,12 +36,12 @@
 
 ## Next
 
-1. **Day close + product statistics DB (D002 §4–5).** Until it exists,
-   the sweep discards each day's staging unaggregated, so no real
-   product should be wired in before it lands.
-2. Get the `wisp.mera.network` zone entry (EphemNet side). Then:
+1. Get the `wisp.mera.network` zone entry (EphemNet side). Then:
    configure-nginx, create `products.json`, deploy, and run the
-   privacy log check.
-3. Wire the hook into a first product (persona is the smallest).
+   privacy log check plus the post-deploy ingest check.
+2. Wire the hook into a first product (persona is the smallest).
+   Confirm a real day closes into `stats.sqlite`.
+3. Dashboard (P001 Phase 3): read-only over the stats DB. Label
+   multi-day uniques as visitor-days, never "unique visitors".
 4. Settle D002's open questions: key fields beyond IP+UA, salt scope,
    restart behaviour, and the proposed values.

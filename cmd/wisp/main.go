@@ -1,5 +1,6 @@
 // Command wisp runs wisp's server: the ingest API product hooks send to,
-// and the staging sweep.
+// and the day close that turns each product-day's keyed staging into
+// keyless rows in the product statistics DB.
 //
 //	wisp serve [-addr :8080] [-data /data] [-registry /etc/wisp/products.json]
 //	wisp hash-token   < token   # prints the SHA-256 to put in the registry
@@ -24,10 +25,11 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/lnd3/wisp/hook"
+	"github.com/lnd3/wisp/internal/dayclose"
 	"github.com/lnd3/wisp/internal/ingest"
 	"github.com/lnd3/wisp/internal/registry"
 	"github.com/lnd3/wisp/internal/staging"
+	"github.com/lnd3/wisp/internal/stats"
 )
 
 func main() {
@@ -69,9 +71,9 @@ func hashToken() error {
 func serve(args []string) error {
 	fs := flag.NewFlagSet("serve", flag.ExitOnError)
 	addr := fs.String("addr", ":8080", "listen address")
-	data := fs.String("data", "/data", "data directory (staging files live under <data>/staging)")
+	data := fs.String("data", "/data", "data directory: <data>/staging (keyed, per product-day) and <data>/stats.sqlite (keyless)")
 	regPath := fs.String("registry", "/etc/wisp/products.json", "product registry file (reloaded on SIGHUP)")
-	sweepEvery := fs.Duration("sweep", 10*time.Minute, "how often to delete staging files past their day's close deadline")
+	closeEvery := fs.Duration("close-every", 10*time.Minute, "how often to close product-days past their deadline")
 	fs.Parse(args)
 
 	logger := log.New(os.Stderr, "wisp: ", log.LstdFlags|log.LUTC)
@@ -89,6 +91,12 @@ func serve(args []string) error {
 		return err
 	}
 	defer store.Close()
+	statsDB, err := stats.Open(filepath.Join(*data, "stats.sqlite"))
+	if err != nil {
+		return err
+	}
+	defer statsDB.Close()
+	closer := &dayclose.Closer{Staging: store, Stats: statsDB, Log: logger}
 
 	h := &ingest.Handler{
 		Registry: func() ingest.Registry { return current.Load() },
@@ -124,18 +132,18 @@ func serve(args []string) error {
 		}
 	}()
 
-	// The sweep runs before serving so no expired keyed file ever sits
-	// around after a restart.
-	sweep(store, time.Now(), logger)
+	// Close before serving, so no expired keyed file sits around after a
+	// restart, then keep closing on a timer.
+	closer.Run(ctx, time.Now())
 	go func() {
-		t := time.NewTicker(*sweepEvery)
+		t := time.NewTicker(*closeEvery)
 		defer t.Stop()
 		for {
 			select {
 			case <-ctx.Done():
 				return
 			case now := <-t.C:
-				sweep(store, now, logger)
+				closer.Run(ctx, now)
 			}
 		}
 	}()
@@ -152,26 +160,4 @@ func serve(args []string) error {
 	shutdown, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 	return srv.Shutdown(shutdown)
-}
-
-// sweep deletes every staging file whose day is past its close deadline.
-// This is the backstop behind CLAUDE.md's "visitor keys never outlive
-// their day": it runs whether or not the day close (aggregation into the
-// statistics DB) has happened.
-func sweep(store *staging.Store, now time.Time, logger *log.Logger) {
-	days, err := store.Days()
-	if err != nil {
-		logger.Printf("sweep: list staging: %v", err)
-		return
-	}
-	for _, d := range days {
-		if now.Before(d.Start().Add(hook.DayCloseAfter)) {
-			continue
-		}
-		if err := store.Delete(d); err != nil {
-			logger.Printf("sweep: delete %s/%s: %v", d.Product, d.Date, err)
-			continue
-		}
-		logger.Printf("sweep: deleted expired staging %s/%s", d.Product, d.Date)
-	}
 }

@@ -9,16 +9,22 @@ real incidents that shaped it; this is the how-to for wisp's slice.
 
 Two containers:
 - **`wisp`**: the server (`cmd/wisp`). It runs the ingest API that
-  product hooks POST to, plus the staging sweep. It sits on an
+  product hooks POST to, plus the day close. It sits on an
   internal-only network with no host port.
 - **`wisp-caddy`**: terminates TLS, reverse-proxies `/v1/*` to `wisp`,
   and serves the static page (`site/index.html`) for everything else.
 
-The day close (aggregation into the product statistics DB) and the
-dashboard aren't built yet. Until they are, the sweep deletes each
-product-day's staging file at its close deadline (day start + 26h)
-**without aggregating it**. Ingested data is thrown away, by design,
-rather than kept past its day.
+**Day close:** every 10 minutes, and at startup, wisp closes each
+product-day that is past its deadline (day start + 26h). For each one
+it:
+1. Seals the day, so late batches get `409`.
+2. Aggregates the day into keyless rows in `/data/stats.sqlite`.
+3. Deletes the day's staging file.
+
+If a close keeps failing, the file is deleted unaggregated after 1h,
+and the log line says `UNAGGREGATED`. Keys never outlive their day by
+more than that. The dashboard isn't built yet; until it is, read the
+stats DB with `sqlite3` (see "Verifying it works").
 
 **Who calls this endpoint:** the products' own backends,
 server-to-server, sending unique events or (preferably) pre-aggregated
@@ -41,7 +47,8 @@ Internet ──▶ nginx (host, shared by every product on bh2) ─────�
        (wisp-internal network, internal: true; no host port)
           │
           ▼
-       wisp-data volume: staging/<product>/<day>.sqlite (0600, deleted at day close)
+       wisp-data volume: staging/<product>/<day>.sqlite (keyed, 0600, deleted at day close)
+                         stats.sqlite (keyless daily rows, kept indefinitely)
 ```
 
 ## Privacy: what this deployment must never log
@@ -58,7 +65,7 @@ anyway, as defense in depth:
 | nginx `:443` (stream, shared skeleton) | No `access_log` in the stream block, and stream logging is off by default. Owned by cinder's shared file; keep it that way. |
 | nginx `:80` (`wisp-http01.conf`) | `access_log off` and `error_log … crit` in wisp's own vhost. **Not** in persona's or cinder's copies: Debian's stock `http{}` access log would otherwise record every plain-http visitor. |
 | wisp-caddy | No `log` directive in any site block, so there is no access log. The global `log` block drops `http.log.error` and `http.handlers.reverse_proxy`, the loggers that embed the request (and so `remote_ip`). |
-| wisp (`cmd/wisp`) | Logs only startup, registry reloads, sweep deletions (product/day) and internal staging failures, never request content. Tested: bad requests log nothing. |
+| wisp (`cmd/wisp`) | Logs only startup, registry reloads, day closes (product, day and visitor count) and internal failures, never request content. Tested: bad requests log nothing. |
 | Docker `json-file` logs | Only what the above allows through: Caddy's ACME/TLS lifecycle and wisp's own lines. |
 
 Don't copy cinder's `monitor.sh` here: its usage digest works *by*
@@ -185,6 +192,12 @@ deploy/ops.sh bh2 /opt/wisp live down
   domain.
 - With a real product token, a minimal batch for today returns `200`
   `{"status":"ok"}` (see `internal/ingest` for the shape).
+- After a day closes (the next day at 02:00 UTC at the latest, plus up
+  to 10 min), `deploy/ops.sh bh2 /opt/wisp live logs wisp` shows
+  `dayclose: closed <product>/<day>`. The day's row is then in the
+  stats DB. The container has no shell, so copy the DB out to read it:
+  `docker cp wisp-live-wisp-1:/data/stats.sqlite /tmp/ && sqlite3
+  /tmp/stats.sqlite 'SELECT * FROM daily_totals'`.
 - **Privacy check:** after a few requests, confirm
   `sudo grep -c '<your-own-ip>' /var/log/nginx/access.log` doesn't grow
   from wisp traffic. Also confirm

@@ -20,6 +20,7 @@ import (
 
 	"github.com/lnd3/wisp/hook"
 	"github.com/lnd3/wisp/internal/registry"
+	"github.com/lnd3/wisp/internal/stats"
 	_ "modernc.org/sqlite"
 )
 
@@ -49,6 +50,10 @@ CREATE TABLE IF NOT EXISTS applied_batches (
 ) WITHOUT ROWID;
 `
 
+// ErrClosed: the day has been sealed for its close; no further batches
+// may merge into it. The ingest API answers 409, as for any closed day.
+var ErrClosed = errors.New("staging: day closed")
+
 // Day identifies one staging file.
 type Day struct {
 	Product string
@@ -66,9 +71,10 @@ func (d Day) Start() time.Time {
 // sending every few minutes, far below where finer locking would matter,
 // and one lock makes "no merge races a delete" trivially true.
 type Store struct {
-	dir  string
-	mu   sync.Mutex
-	open map[Day]*sql.DB
+	dir    string
+	mu     sync.Mutex
+	open   map[Day]*sql.DB
+	closed map[Day]bool // sealed days; Merge refuses them
 }
 
 // Open prepares dir (created 0700 if missing) as the staging root.
@@ -76,7 +82,7 @@ func Open(dir string) (*Store, error) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, fmt.Errorf("staging: %w", err)
 	}
-	return &Store{dir: dir, open: make(map[Day]*sql.DB)}, nil
+	return &Store{dir: dir, open: make(map[Day]*sql.DB), closed: make(map[Day]bool)}, nil
 }
 
 func (s *Store) path(d Day) string {
@@ -132,7 +138,14 @@ func (s *Store) db(d Day) (*sql.DB, error) {
 func (s *Store) Merge(ctx context.Context, product string, b *hook.Batch) (duplicate bool, err error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	db, err := s.db(Day{Product: product, Date: b.Day})
+	d := Day{Product: product, Date: b.Day}
+	// Without this, a batch validated just before the deadline but merged
+	// just after the close deleted the file would recreate it — and the
+	// next close would overwrite the day's real stats with that one batch.
+	if s.closed[d] {
+		return false, ErrClosed
+	}
+	db, err := s.db(d)
 	if err != nil {
 		return false, fmt.Errorf("staging: open: %w", err)
 	}
@@ -193,6 +206,133 @@ func (s *Store) Merge(ctx context.Context, product string, b *hook.Batch) (dupli
 	return false, nil
 }
 
+// Seal marks d closed: from now on Merge refuses it with ErrClosed. The
+// day close seals first, then summarizes and deletes, so nothing can
+// merge in between. The mark outlives Delete (that's its point); marks
+// older than a week are pruned — by then the ingest API's own deadline
+// check refuses those days anyway.
+func (s *Store) Seal(d Day) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.closed[d] = true
+	cutoff := d.Start().AddDate(0, 0, -7)
+	for c := range s.closed {
+		if c.Start().Before(cutoff) {
+			delete(s.closed, c)
+		}
+	}
+}
+
+// Summarize computes d's keyless daily statistics (D002 §4) from its
+// staging file. Visitor keys are read only to group by; none appear in
+// the result.
+func (s *Store) Summarize(ctx context.Context, d Day) (*stats.Day, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, err := os.Stat(s.path(d)); err != nil {
+		return nil, fmt.Errorf("staging: summarize: %w", err)
+	}
+	db, err := s.db(d)
+	if err != nil {
+		return nil, fmt.Errorf("staging: summarize: %w", err)
+	}
+	out := &stats.Day{Product: d.Product, Date: d.Date}
+
+	// Per visitor: visits, agent, total views and distinct viewed pages.
+	agents := map[[2]string]int{}
+	hist := map[[2]string]int{}
+	rs, err := db.QueryContext(ctx, `
+		SELECT v.visits, v.browser, v.os, v.device,
+		       COALESCE(SUM(CASE WHEN h.kind = 'view' THEN h.count END), 0),
+		       COUNT(CASE WHEN h.kind = 'view' THEN 1 END)
+		FROM staging_visitor v LEFT JOIN staging_hit h ON h.key = v.key
+		GROUP BY v.key`)
+	if err != nil {
+		return nil, fmt.Errorf("staging: summarize visitors: %w", err)
+	}
+	for rs.Next() {
+		var visits, views, pages int
+		var browser, os_, device string
+		if err := rs.Scan(&visits, &browser, &os_, &device, &views, &pages); err != nil {
+			rs.Close()
+			return nil, fmt.Errorf("staging: summarize visitors: %w", err)
+		}
+		out.Uniques++
+		out.Visits += visits
+		out.Views += views
+		if views == 1 {
+			out.Bounces++
+		}
+		agents[[2]string{"browser", browser}]++
+		agents[[2]string{"os", os_}]++
+		agents[[2]string{"device", device}]++
+		hist[[2]string{"visits", stats.VisitsBucket(visits)}]++
+		if views > 0 {
+			hist[[2]string{"views", stats.ViewsBucket(views)}]++
+			hist[[2]string{"pages", stats.PagesBucket(pages)}]++
+		}
+	}
+	rs.Close()
+	if err := rs.Err(); err != nil {
+		return nil, fmt.Errorf("staging: summarize visitors: %w", err)
+	}
+
+	// Per page: the hit table's key is (key, kind, page_key), so COUNT(*)
+	// per (kind, page_key) is the number of distinct visitors.
+	rs, err = db.QueryContext(ctx, `SELECT kind, page_key, SUM(count), COUNT(*) FROM staging_hit GROUP BY kind, page_key ORDER BY kind, page_key`)
+	if err != nil {
+		return nil, fmt.Errorf("staging: summarize pages: %w", err)
+	}
+	for rs.Next() {
+		var p stats.Page
+		if err := rs.Scan(&p.Kind, &p.PageKey, &p.Hits, &p.Uniques); err != nil {
+			rs.Close()
+			return nil, fmt.Errorf("staging: summarize pages: %w", err)
+		}
+		if p.Kind == "download" {
+			out.Downloads += p.Hits
+		}
+		out.Pages = append(out.Pages, p)
+	}
+	rs.Close()
+	if err := rs.Err(); err != nil {
+		return nil, fmt.Errorf("staging: summarize pages: %w", err)
+	}
+
+	rs, err = db.QueryContext(ctx, `SELECT host, SUM(count), COUNT(*) FROM staging_ref GROUP BY host ORDER BY host`)
+	if err != nil {
+		return nil, fmt.Errorf("staging: summarize referrers: %w", err)
+	}
+	for rs.Next() {
+		var r stats.Referrer
+		if err := rs.Scan(&r.Host, &r.Visits, &r.Uniques); err != nil {
+			rs.Close()
+			return nil, fmt.Errorf("staging: summarize referrers: %w", err)
+		}
+		out.Referrers = append(out.Referrers, r)
+	}
+	rs.Close()
+	if err := rs.Err(); err != nil {
+		return nil, fmt.Errorf("staging: summarize referrers: %w", err)
+	}
+
+	for k, n := range agents {
+		out.Agents = append(out.Agents, stats.Agent{Dim: k[0], Value: k[1], Uniques: n})
+	}
+	sort.Slice(out.Agents, func(i, j int) bool {
+		a, b := out.Agents[i], out.Agents[j]
+		return a.Dim < b.Dim || a.Dim == b.Dim && a.Value < b.Value
+	})
+	for k, n := range hist {
+		out.Hist = append(out.Hist, stats.Bucket{Metric: k[0], Bucket: k[1], Visitors: n})
+	}
+	sort.Slice(out.Hist, func(i, j int) bool {
+		a, b := out.Hist[i], out.Hist[j]
+		return a.Metric < b.Metric || a.Metric == b.Metric && a.Bucket < b.Bucket
+	})
+	return out, nil
+}
+
 // Days lists the staging files present, sorted by date then product.
 func (s *Store) Days() ([]Day, error) {
 	s.mu.Lock()
@@ -231,7 +371,8 @@ func (s *Store) Days() ([]Day, error) {
 }
 
 // Delete closes d's handle and removes its file and any SQLite side
-// files. Deleting a day that doesn't exist is not an error.
+// files. Deleting a day that doesn't exist is not an error. A Seal on d
+// stays in force.
 func (s *Store) Delete(d Day) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()

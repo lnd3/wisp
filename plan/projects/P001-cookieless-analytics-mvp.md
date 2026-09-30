@@ -85,8 +85,8 @@ full technical design.
       if any) and salt scope (per-product vs. shared)
 - [ ] Confirm D002's proposed wire format, day close (UTC + 2h grace),
       staging/stats DB layout, and the (proposed) defaults
-- [ ] Choose storage (start simple — Postgres/SQLite — defer a
-      column-store like ClickHouse until scale actually demands it)
+- [x] Choose storage: SQLite for both staging and stats (D002); defer
+      anything heavier until query load demands it
 
 ### Phase 2 — Ingest API + product integration
 - [x] Ingest API (`internal/ingest`, `cmd/wisp serve`): auth, validation,
@@ -101,9 +101,8 @@ full technical design.
 - [ ] Bot/crawler filtering (likely product-side now, before aggregation)
 
 ### Phase 3 — Storage, rollups, dashboard
-- [ ] Day close + product statistics DB (D002 §4–5) — **needed before a
-      real product is wired in**: until it exists the sweep deletes each
-      day's staging unaggregated
+- [x] Day close + product statistics DB (D002 §4–5): `internal/stats`,
+      `internal/dayclose`, `staging.Summarize`/`Seal`
 - [ ] Events schema + rollup jobs
 - [ ] Dashboard UI
 

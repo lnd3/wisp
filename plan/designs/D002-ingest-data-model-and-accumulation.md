@@ -505,7 +505,11 @@ N/A. Greenfield.
   batch limits:** all proposed values.
 - **Country/GeoIP:** still open from D001. If added, it's
   product-side, as one more coarse `agent`-style dimension.
-- **Stats DB engine:** SQLite (single file, matches staging) vs.
+- ~~**Stats DB engine**~~ **Resolved 2026-09-30: SQLite**
+  (`<data>/stats.sqlite`, WAL). It matches staging, needs no extra
+  service, and the pure-Go driver is already a dependency. Revisit
+  only if query load demands it. Original question: SQLite (single
+  file, matches staging) vs.
   Postgres. Nothing above depends on it.
 
 ## Related
@@ -515,6 +519,34 @@ N/A. Greenfield.
 - Thesis: [[T001]]
 
 ## Log
+
+2026-09-30 (later) — **§4–§5 implemented**: `internal/stats` (schema
+exactly as §5; `daily_page`'s count column is named `hits`, since it
+holds views *or* downloads), `staging.Summarize`, and
+`internal/dayclose`, run by `wisp serve` at startup and every 10 min.
+It replaces the interim unaggregated sweep. Tests include D002's
+worked example as a literal case: exact rows, and the key grepped for
+in every file afterwards (absent). Three mutations were caught:
+skipping the seal, WriteDay not replacing, and skipping the delete.
+Decisions beyond the text:
+- **Seal before summarize (a race the text missed).** A batch
+  validated just before the deadline could merge *after* the close
+  deleted the file. That would recreate a keyed file, and the next
+  close's replace-upsert would then overwrite the real stats with that
+  one batch. `Store.Seal` marks the day closed first; `Merge` then
+  returns `ErrClosed`, which ingest maps to `409`.
+- **Failure bound:** a close that keeps failing is retried for 1h past
+  the deadline, then the staging file is deleted unaggregated and
+  logged as `UNAGGREGATED`. Losing a day's stats is recoverable; keys
+  outliving their day is not.
+- **Histograms:** `pages` and `views` count only visitors with at least
+  one view. A download-only visitor appears in `visits` (and uniques)
+  but not in those two histograms. Bucket `"0"` exists only for
+  defensive completeness.
+- **Bounces** = visitors with exactly one view in total, as specified.
+  Download-only visitors are not bounces.
+- A schema test pins the allowed stats columns, so a key-like column
+  can't be added unnoticed.
 
 2026-09-30 (later) — **§2–§3 implemented**: the ingest API
 (`internal/ingest`), the registry (`internal/registry`), staging

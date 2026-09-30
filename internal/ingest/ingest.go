@@ -20,6 +20,7 @@ import (
 
 	"github.com/lnd3/wisp/hook"
 	"github.com/lnd3/wisp/internal/registry"
+	"github.com/lnd3/wisp/internal/staging"
 )
 
 // Limits on a batch — plan/designs/D002 §2. A well-behaved hook never
@@ -126,6 +127,12 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	dup, err := h.Stager.Merge(r.Context(), product, &b)
+	if errors.Is(err, staging.ErrClosed) {
+		// Validated just before the deadline, but the close sealed the day
+		// first. Same answer as any closed day: the hook drops the batch.
+		writeJSON(w, http.StatusConflict, response{Error: "day closed"})
+		return
+	}
 	if err != nil {
 		if h.Log != nil {
 			// err comes from staging/SQLite (I/O, constraint names), never

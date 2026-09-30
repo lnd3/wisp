@@ -36,8 +36,9 @@ See `hook/doc.go` and `plan/designs/D002-*.md`.
 
 ## Status
 
-Early. The in-product `hook` package is implemented. The ingest API,
-statistics DB and dashboard are not built yet. See
+Early. Implemented: the in-product `hook`, the ingest API, the day
+close, and the product statistics DB. Not built yet: the dashboard.
+Not deployed yet. See
 `plan/projects/P001-*.md` for current scope and tasks.
 
 ## Validate the plan before committing
