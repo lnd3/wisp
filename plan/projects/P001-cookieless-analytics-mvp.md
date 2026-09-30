@@ -24,10 +24,16 @@ full technical design.
 ## Scope
 
 - Included:
-  - A collector endpoint receiving pageview and download events
-  - A client-side JS snippet: fires pageviews (incl. SPA route-change
-    support), listens for download-link clicks
+  - An authenticated, server-to-server ingest API called by the
+    products' own backends — never by end users' browsers — accepting
+    both unique events and aggregated event data (aggregates preferred:
+    more efficient, and less per-visitor data leaves the product)
+  - A product-side contract for what a backend may send (see [[D001]]'s
+    2026-09-30 revision — where the visitor hash is computed, event and
+    aggregate shapes)
   - Cookieless daily-rotating-salt visitor hashing (no raw IP stored)
+  - Deployment at `wisp.mera.network` on the shared `bh2` host
+    (`deploy/`, adapted from `persona`/`EphemNet`/`cinder`)
   - Bot/crawler filtering
   - An events store + daily/hourly rollups
   - A dashboard: time series, top pages, top referrers, device
@@ -53,7 +59,7 @@ full technical design.
 ## Linked
 
 - **Theses**: [[T001]]
-- **Designs**: [[D001]]
+- **Designs**: [[D001]], [[D002]] (ingest data model + accumulation)
 - **Origin**: this repo's idea was previously tracked only in
   `superplan` (project `P012`) — see that repo for the design-formation
   history; this repo's own plan is now the source of truth going
@@ -61,20 +67,36 @@ full technical design.
 
 ## Tasks
 
+### Phase 0 — Deployment
+- [x] Deployment tooling adapted from `persona`/`EphemNet`/`cinder`
+      (`deploy/`) — ports/subnet checked live on `bh2`
+- [ ] `wisp.mera.network` zone entry in `bh2`'s EphemNet `zones.json`
+      (EphemNet-side operator step — see `deploy/README.md`)
+- [ ] First live deploy (placeholder page) + privacy log check
+
 ### Phase 1 — Design decisions
 - [ ] Decide build-vs-adopt for real (see D001's Open Questions) —
       confirm a from-scratch build is actually wanted over configuring
       an existing cookieless tool (GoatCounter, Plausible/Umami in
       no-cookie mode)
-- [ ] Pin down exact hash inputs and salt-rotation mechanics
+- [x] Decide where the visitor hash runs: product-side; batches carry
+      per-key daily distributions; wisp deletes keys at day close (D001)
+- [ ] Pin down exact hash inputs (which browser fields beyond IP+UA,
+      if any) and salt scope (per-product vs. shared)
+- [ ] Confirm D002's proposed wire format, day close (UTC + 2h grace),
+      staging/stats DB layout, and the (proposed) defaults
 - [ ] Choose storage (start simple — Postgres/SQLite — defer a
       column-store like ClickHouse until scale actually demands it)
 
-### Phase 2 — Core collector + client
-- [ ] Collector endpoint (pageview + download events)
-- [ ] Client snippet (pageview firing, SPA route-change hook,
-      download-link click listener)
-- [ ] Bot/crawler filtering
+### Phase 2 — Ingest API + product integration
+- [ ] Ingest API (unique events + aggregated event data)
+- [ ] Product registry: product key + auth token per product (hash-only
+      at wisp, server-only file excluded from deploy rsync; D002)
+- [ ] `hook` package (D002 §1b): `Start`/`View`/`Download`/`Close`
+      and the interval dispatcher. Stdlib-only Go.
+- [ ] Wire the hook into a first real product (TBD — persona's landing
+      page is the smallest candidate)
+- [ ] Bot/crawler filtering (likely product-side now, before aggregation)
 
 ### Phase 3 — Storage, rollups, dashboard
 - [ ] Events schema + rollup jobs
@@ -100,3 +122,32 @@ ask, not yet designed or scoped — see the new Scope bullet above.
 `EphemNet` itself has taken no dependency on this; its own
 `monitor.sh` task remains independently blocked on a real alert channel
 regardless of whether `wisp` ends up building this.
+
+2026-09-30 (later) — **Direction change from the user: wisp ingests
+from product backends, not from end users.** Quote: "wisp api will
+accept analytics data from the actual product backends, and not from
+users themselves, because of our product-wide privacy protection
+guidelines. wisp will accept unique events, as well as aggregated event
+data (which is preferable since it's more efficient)." Consequences:
+the client JS snippet is out of scope (no browser ever talks to wisp);
+the public endpoint becomes an authenticated server-to-server API;
+aggregates are the preferred input. Scope and Tasks rewritten
+accordingly; [[D001]] carries the architecture revision and the new
+open questions (chiefly: where the daily-salted visitor hash is
+computed). Same session: deployment tooling added under `deploy/`
+(copied from `persona`, itself from `EphemNet`/`cinder`), targeting
+`wisp.mera.network` on `bh2` — live ports 9480/9220, subnet
+172.27.1.0/24, all checked against `bh2` directly. Not yet deployed:
+`wisp.mera.network` has no DNS yet (needs an EphemNet `zones.json`
+entry). Residual logging risk outside this repo: the shared nginx
+stream skeleton's error log can record `client: <ip>` on backend
+connect failures — would need a collaborative edit to cinder's
+`sni-shared-passthrough.conf`; much lower stakes now that visitors
+never connect to wisp directly.
+
+2026-09-30 (later still) — Ingest batch shape decided (see [[D001]]'s
+Log): per-visitor daily distributions keyed by a product-side salted
+hash; wisp aggregates at day close and then deletes every key. Two
+decisions remain open because they touch this repo's own invariants:
+which extra browser fields go into the key, and whether the salt is
+per-product or shared.

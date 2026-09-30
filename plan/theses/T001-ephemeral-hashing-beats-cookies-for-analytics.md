@@ -99,3 +99,10 @@ cookie-consent popup, ever, cookieless daily-hash approach, deliberate
 lower-bound estimate rather than an exact count — is the thesis itself,
 not an implementation detail layered on top of a more conventional
 analytics design.
+
+2026-09-30 (later) — Checked against D001's backend-only-ingest
+revision: the belief itself is unchanged (a daily-salted lower bound
+is enough), and it arguably strengthens the no-consent-banner claim,
+since no browser ever contacts wisp. What shifts is *where* the hash
+runs, not whether it's sufficient. Conviction unchanged at 6.
+

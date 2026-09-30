@@ -1,6 +1,6 @@
 # wisp Plan Index
 
-*Last updated: 2026-09-30 06:15:53 UTC*
+*Last updated: 2026-09-30 17:11:44 UTC*
 
 Status: `IDEA` · `PLANNING` · `IN_PROGRESS` · `BLOCKED` · `DONE` · `DEFERRED` · `CANCELLED`
 
@@ -27,6 +27,7 @@ Status: `IDEA` · `PLANNING` · `IN_PROGRESS` · `BLOCKED` · `DONE` · `DEFERRE
 | ID | Title | Status | Project | Doc |
 | --- | --- | --- | --- | --- |
 | [D001](designs/D001-cookieless-hash-analytics-architecture.md) | Cookieless, ephemeral analytics — collection, hashing, storage, and rollup architecture | PLANNING | P001 | (link if applicable) |
+| [D002](designs/D002-ingest-data-model-and-accumulation.md) | Ingest data model — generation, day-scoped staging, and accumulation into the product statistics DB | PLANNING | P001 | (link if applicable) |
 
 ---
 

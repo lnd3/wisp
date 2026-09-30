@@ -11,3 +11,8 @@ Categories: GOTCHA · PATTERN · LEARNING · WARNING · DECISION · CONSTRAINT �
 
 ---
 
+2026-09-30 | DECISION | wisp ingests only from product backends, never browsers (product-wide privacy guidelines) — aggregates preferred over unique events; the client-snippet design in D001 is superseded
+2026-09-30 | GOTCHA | Debian's stock nginx http{} access_log and Caddy's http.log.error / reverse_proxy loggers all persist raw client IPs by default — wisp's deploy disables all three (verified the Caddy one empirically: a 502 logs remote_ip unless excluded); cinder's monitor.sh digest depends on IP-bearing access logs and must never be copied here
+2026-09-30 | FINDING | persona's pinned Docker subnet 172.32.1.0/24 is outside RFC 1918 (172.16.0.0/12 ends at 172.31) — wisp uses 172.27.x instead; worth relaying to persona
+2026-09-30 | WARNING | A plain hash of IPv4+User-Agent is brute-forceable (~4.3B addresses × a few thousand real UAs) — visitor keys must be HMACs under a product-held daily salt that wisp never sees, or the "no raw IP" invariant is false in practice
+2026-09-30 | CONSTRAINT | Daily unique counts are not additive — summed over days they are visitor-days; the dashboard must never label a multi-day sum as "unique visitors" (D002)
