@@ -18,9 +18,26 @@ as a limitation to work around.
 See `plan/theses/T001-*.md` for the full reasoning and
 `plan/designs/D001-*.md` for the technical design.
 
+## How products report
+
+Products never make visitors' browsers contact wisp. They call wisp's
+Go hook from their own request handlers, and it forwards per-visitor
+daily counts server-to-server:
+
+```go
+w, _ := hook.Start(hook.Config{Endpoint: "https://wisp.mera.network/v1/ingest",
+	ProductKey: "myproduct", Token: os.Getenv("WISP_TOKEN"), ClientIP: clientIP})
+defer w.Close(ctx)
+
+w.View(r, "/notes/:id") // route template, never the raw path
+```
+
+See `hook/doc.go` and `plan/designs/D002-*.md`.
+
 ## Status
 
-Early — design decisions made, implementation not started. See
+Early. The in-product `hook` package is implemented. The ingest API,
+statistics DB and dashboard are not built yet. See
 `plan/projects/P001-*.md` for current scope and tasks.
 
 ## Validate the plan before committing

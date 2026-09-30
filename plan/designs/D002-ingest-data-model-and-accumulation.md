@@ -205,8 +205,10 @@ What a product still owns:
 - Supplying `ClientIP` if it sits behind a proxy. Every product on
   `bh2` sits behind Caddy, so the default `r.RemoteAddr` would be
   Caddy's address. That's not a privacy failure, but uniques collapse
-  to about 1 per day. `w.Stats()` reports this ("all hits from one
-  address") so it gets noticed.
+  to about 1 per day. The hook counts hits from private or loopback
+  client addresses (`Stats().PrivateClientIPs`). Once they're the
+  majority of the day's hits, it reports `ErrLikelyProxyAddress` once
+  to `OnError`. It does this without keeping any address.
 
 ### 2. Wire format
 
@@ -513,6 +515,29 @@ N/A. Greenfield.
 - Thesis: [[T001]]
 
 ## Log
+
+2026-09-30 (later) — **§1b implemented** in `hook/` (module
+`github.com/lnd3/wisp`, `go 1.23`, so it builds locally and is
+importable by the products' 1.24+). 95% statement coverage, race
+detector clean, and two deliberate mutations caught (a skipped salt
+wipe, and a referrer counted mid-visit). What's in the code beyond
+the text above:
+- `Start` rejects plain-http endpoints except loopback, so a token is
+  never sent in clear.
+- Misuse warnings (`ErrInvalidPageKey`, `ErrLikelyProxyAddress`) are
+  reported once per UTC day, not per hit, and never include the
+  offending page key, which might be a raw path.
+- An idle midnight retires the day without creating a new salt; the
+  next hit creates one lazily.
+- 408/429/5xx and network errors retry. 409 gives `ErrDayClosed`, and
+  any other 4xx gives `ErrRejected`; both drop the batch.
+- `Close` makes one forced send attempt and returns an error counting
+  the batches it dropped.
+- The `MaxVisitorsPerDay` cap (default 200,000) bounds accumulator
+  memory, alongside the 500-pages-per-visitor and 288-queued-batch
+  caps.
+- `wisp-hook` is on the bot list, so one wisp hook's traffic is never
+  counted by another.
 
 2026-09-30 (later) — Product credentials, per the user: each product
 has a product key and an authentication token that wisp accepts.

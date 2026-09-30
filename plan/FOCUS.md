@@ -11,6 +11,8 @@
   `deploy/`, adapted from persona/EphemNet/cinder, with ports and
   subnet checked live on `bh2`. It serves a placeholder page until an
   ingest API exists.
+- **`hook/` is implemented** (D002 §1b), tested but not yet used by
+  any product. There's no ingest API to receive its batches yet.
 - **D001's revision to backend-only ingest.** Products' servers send
   unique events or (preferably) aggregates. No browser ever talks to
   wisp.

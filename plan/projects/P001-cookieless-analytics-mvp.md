@@ -92,8 +92,8 @@ full technical design.
 - [ ] Ingest API (unique events + aggregated event data)
 - [ ] Product registry: product key + auth token per product (hash-only
       at wisp, server-only file excluded from deploy rsync; D002)
-- [ ] `hook` package (D002 §1b): `Start`/`View`/`Download`/`Close`
-      and the interval dispatcher. Stdlib-only Go.
+- [x] `hook` package (D002 §1b): `Start`/`View`/`Download`/`Close`
+      and the interval dispatcher. Stdlib-only Go (`hook/`).
 - [ ] Wire the hook into a first real product (TBD — persona's landing
       page is the smallest candidate)
 - [ ] Bot/crawler filtering (likely product-side now, before aggregation)
