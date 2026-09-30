@@ -28,6 +28,10 @@ purpose: give up exact, durable identity in exchange for never needing
 a consent banner and never storing anything that could re-identify a
 specific visitor later, even to the operator.
 
+**Client-side collection of any kind is ruled out by [[C001]].** No
+visitor's browser is ever made to contact wisp or any other analytics
+origin. The original snippet design below predates that rule.
+
 **Alternatives considered and rejected:**
 - **First-party cookie with a random UUID** — accurate, standard, but
   requires consent under GDPR/ePrivacy once used for anything beyond
@@ -53,8 +57,11 @@ specific visitor later, even to the operator.
 
 > **Revision 2026-09-30 — ingest is backend-only (supersedes parts of
 > this section).** Per the user: wisp accepts analytics data from the
-> products' own backends, never from end users' browsers, under the
-> product-wide privacy guidelines. Both **unique events** and
+> products' own backends, never from end users' browsers. **Why:**
+> forcing visitors to make requests to a third-party site without
+> their consent is considered simply offensive, and collecting in the
+> product avoids sprawling outbound requests from the visitor's side.
+> This is now the portfolio-wide rule [[C001]]. Both **unique events** and
 > **aggregated event data** are accepted; aggregates are preferred
 > (more efficient, and less per-visitor data ever leaves a product).
 > What this changes below:

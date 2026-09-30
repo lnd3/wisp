@@ -12,3 +12,4 @@ Format: `YYYY-MM-DD | ID | old_status → new_status | note`
 2026-09-30 | D002 | NEW → PLANNING | Ingest data model: product-side generation, wire format, day-scoped staging, day close, keyless stats DB accumulation (proposed defaults pending user review)
 2026-09-30 | D002 | PLANNING → PLANNING | Product integration decided: in-product hook package (github.com/lnd3/wisp/hook) with interval dispatcher that sends only when data is pending
 2026-09-30 | D002 | PLANNING → PLANNING | Per-product credentials: product key + auth token; wisp keeps token hashes only in a server-side registry
+2026-09-30 | C001 | NEW → STABLE | No visitor-side third-party requests: portfolio-wide rule behind backend-only ingest (user's stated rationale)

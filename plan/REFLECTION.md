@@ -16,3 +16,4 @@ Categories: GOTCHA · PATTERN · LEARNING · WARNING · DECISION · CONSTRAINT �
 2026-09-30 | FINDING | persona's pinned Docker subnet 172.32.1.0/24 is outside RFC 1918 (172.16.0.0/12 ends at 172.31) — wisp uses 172.27.x instead; worth relaying to persona
 2026-09-30 | WARNING | A plain hash of IPv4+User-Agent is brute-forceable (~4.3B addresses × a few thousand real UAs) — visitor keys must be HMACs under a product-held daily salt that wisp never sees, or the "no raw IP" invariant is false in practice
 2026-09-30 | CONSTRAINT | Daily unique counts are not additive — summed over days they are visitor-days; the dashboard must never label a multi-day sum as "unique visitors" (D002)
+2026-09-30 | DECISION | Backend-only ingest exists because forcing visitors to contact a third-party origin without consent is considered offensive, not just a privacy cost — recorded as C001; it also rules out first-party proxy scripts and browser-callable ingest (no CORS, no pixel)
