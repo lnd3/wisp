@@ -151,8 +151,11 @@ full technical design.
 - [x] `deploy/uptime/`: 16.8 MB alpine image (vs 867 MB), generic SSH
       deploy (cross-compiles, validates the host config before
       replacing the running prober)
-- [ ] Deploy on `rbserver1`: needs a writable directory and the user's
-      alert channel (ntfy topic) in the host-only config.json
+- [x] Deployed on `rbserver1` at `/opt/uptime-wisp` (2026-10-01):
+      14 checks, all up; alerts to ntfy topic `lnd_bh2_alerts_84af2f`
+      (test alert confirmed delivered); status page `rbserver1.lan:8080`
+- [ ] Optional: `heartbeat` to a third-party dead-man service (closes
+      offgrid's co-location blind spot on `rbserver1`)
 
 ### Phase 3 — Storage, rollups, dashboard
 - [x] Day close + product statistics DB (D002 §4–5): `internal/stats`,
@@ -425,4 +428,22 @@ exactly what this item requires:
   bug**: `ns1`/`ns2.mera.network` return NXDOMAIN publicly, because
   ephemnetd answers its own NS names with a synthesized SOA. The `.network`
   glue keeps delegation working. Flagged to the user, not fixed here.
+
+2026-10-01 (later) — **uptime-wisp live on `rbserver1`**
+(`/opt/uptime-wisp`, after the user renamed the old directory).
+- **Config:** written on the host only (0600), with the user's ntfy
+  topic `lnd_bh2_alerts_84af2f`.
+- **State:** healthy, 0 restarts, 25.9 MB image on arm64. All 14
+  checks up.
+- **Alerts:** a `-test-alert` was confirmed on the topic via ntfy's
+  poll API (20:21:17 UTC).
+- **ns1 finding:** EphemNet fixed `ns1`/`ns2.mera.network` (EphemNet
+  `6b39d4f`) before this went live, so that check is up and stays as
+  a regression guard.
+- **Memory cap:** docker stats shows 0B memory on the Pi, so the
+  kernel's memory cgroup is likely off and `mem_limit` isn't enforced
+  there. Harmless at this footprint.
+- **Also seen:** EphemNet `009df85` split site serving into
+  `ephemnet-site`, which may unblock EphemNet A006 (wisp analytics) if
+  it's a Go handler.
 

@@ -86,11 +86,11 @@ silently ignored.
 `https://ntfy.sh/<that-topic>` in `alerts`. On ntfy.sh, a topic is
 secret only by being unguessable.
 
-## Known finding
+## First finding
 
-`ns1.mera.network resolves` (in the example config) **fails today**.
-EphemNet's nameserver answers its own NS hostnames with a synthesized
-SOA instead of an A record, so public resolvers return NXDOMAIN for
-`ns1`/`ns2.mera.network`. Delegation still works through the `.network`
-glue records, but it's a misconfiguration for EphemNet to fix. The
-check alerts once, then stays quiet until it's fixed.
+The prober's first live dry run (2026-10-01) found that
+`ns1`/`ns2.mera.network` returned NXDOMAIN publicly. EphemNet's
+nameserver answered its own NS hostnames with a synthesized SOA; only
+the `.network` glue kept delegation working. EphemNet fixed it the same
+day (EphemNet `6b39d4f`). The `ns1.mera.network resolves` check stays
+in the config as a regression guard.

@@ -35,10 +35,10 @@
 1. After 2026-10-02 02:10 UTC: check that the dashboard History shows
    cinderapps, offgridapp and wisp for 2026-10-01, plus the close log
    lines.
-2. Uptime monitoring: deployed on `rbserver1:3001`. The user creates
-   the admin account, picks a third-party alert channel and adds the
-   README's monitors. Then decide on the off-`rbserver1`
-   dead-man's-switch instance.
+2. Uptime monitoring: uptime-wisp is live on `rbserver1:8080`, alerting
+   to ntfy. Optional next: a third-party heartbeat (dead-man) for
+   offgrid's co-location blind spot. EphemNet's `ephemnet-site` split
+   (`009df85`) may unblock its A006 wisp integration.
 3. EphemNet/persona integrations once they have Go handlers.
 4. D002 remaining: confirm the proposed numeric values; country/GeoIP
    undecided.
