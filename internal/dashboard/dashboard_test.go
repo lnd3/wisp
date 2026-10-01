@@ -181,3 +181,24 @@ func TestFormatting(t *testing.T) {
 		}
 	}
 }
+
+func TestHistogramExplains(t *testing.T) {
+	items := []stats.RangeItem{{Label: "1", Count: 58}, {Label: "2", Count: 30}, {Label: "4-5", Count: 12}}
+	day := histogram("pages", items, false)
+	if day.Title != "How many different pages did people open?" || day.Axis != "different pages opened" || day.MultiDay != "" {
+		t.Errorf("single-day copy = %+v", day)
+	}
+	if day.Takeaway != "Most common: 1 page, 58% of visitors." {
+		t.Errorf("takeaway = %q", day.Takeaway)
+	}
+	if c := day.Columns[2]; c.Tip != "4-5 pages" || c.Share != "12%" {
+		t.Errorf("tooltip = %q / %q", c.Tip, c.Share)
+	}
+	multi := histogram("visits", []stats.RangeItem{{Label: "1", Count: 3}, {Label: "2", Count: 9}}, true)
+	if multi.Unit != "visitor-days" || !strings.Contains(multi.MultiDay, "visitor-days") || multi.Takeaway != "Most common: 2 visits, 75% of visitor-days." {
+		t.Errorf("multi-day = %+v", multi)
+	}
+	if empty := histogram("views", nil, true); empty.Takeaway != "" {
+		t.Errorf("no data must give no takeaway, got %q", empty.Takeaway)
+	}
+}

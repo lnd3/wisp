@@ -160,17 +160,78 @@ type column struct {
 	Label string
 	Value string
 	Pct   float64 // height, percent of the plot
+	Tip   string  // tooltip label, e.g. "4-5 pages"
+	Share string  // tooltip share, e.g. "14%"
 }
 
 type columnChart struct {
-	Title    string
-	Subtitle string
-	Unit     string
+	Title    string // a plain question, e.g. "How many different pages did people open?"
+	Subtitle string // what one bar counts
+	MultiDay string // extra note when summed over days (visitor-days); "" for a single day
+	Axis     string // x-axis caption, e.g. "different pages opened"
+	Takeaway string // e.g. "Most common: 1 page, 58% of visitors."
+	Unit     string // "visitors" or "visitor-days"
 	Columns  []column
 }
 
+// histogramCopy is the wording for each per-visitor histogram, kept in
+// one place so the History and Today tabs explain them identically.
+var histogramCopy = map[string]struct{ title, what, axis, one, many string }{
+	"pages": {
+		"How many different pages did people open?",
+		"Each bar counts visitors by how many different pages they opened in a day.",
+		"different pages opened", "page", "pages",
+	},
+	"views": {
+		"How many page views did each visitor make?",
+		"Counts every page view, including repeat views of the same page.",
+		"page views", "view", "views",
+	},
+	"visits": {
+		"Did people come back later the same day?",
+		"A visit ends after 30 min idle, so 2 or more means they came back later that day.",
+		"visits that day", "visit", "visits",
+	},
+}
+
+// histogram builds one of the per-visitor histograms. multiDay marks a
+// range of days, where each visitor counts once per day (visitor-days).
+func histogram(metric string, items []stats.RangeItem, multiDay bool) columnChart {
+	cp := histogramCopy[metric]
+	c := newColumnChart(cp.title, items)
+	c.Subtitle, c.Axis, c.Unit = cp.what, cp.axis, "visitors"
+	if multiDay {
+		c.Unit = "visitor-days"
+		c.MultiDay = "Over several days, a visitor counts once per day they came (visitor-days), so the same person can appear in more than one bar."
+	}
+	total, best := 0, -1
+	for i, it := range items {
+		total += it.Count
+		if best < 0 || it.Count > items[best].Count {
+			best = i
+		}
+	}
+	noun := func(bucket string) string {
+		if bucket == "1" {
+			return cp.one
+		}
+		return cp.many
+	}
+	for i := range c.Columns {
+		c.Columns[i].Tip = c.Columns[i].Label + " " + noun(c.Columns[i].Label)
+		if total > 0 {
+			c.Columns[i].Share = fmt.Sprintf("%.0f%%", 100*float64(items[i].Count)/float64(total))
+		}
+	}
+	if best >= 0 && total > 0 {
+		c.Takeaway = fmt.Sprintf("Most common: %s %s, %.0f%% of %s.",
+			items[best].Label, noun(items[best].Label), 100*float64(items[best].Count)/float64(total), c.Unit)
+	}
+	return c
+}
+
 func newColumnChart(title string, items []stats.RangeItem) columnChart {
-	c := columnChart{Title: title, Subtitle: "Visitor-days in each bucket", Unit: "visitor-days"}
+	c := columnChart{Title: title, Unit: "visitor-days"}
 	max := 0
 	for _, it := range items {
 		max = int(math.Max(float64(max), float64(it.Count)))

@@ -328,15 +328,15 @@ func (h *Handler) build(ctx context.Context, products []string, product string, 
 		metric string
 		title  string
 	}{
-		{&v.PagesHist, "pages", "Distinct pages per visitor-day"},
-		{&v.ViewsHist, "views", "Views per visitor-day"},
-		{&v.VisitsHist, "visits", "Visits per visitor-day"},
+		{&v.PagesHist, "pages", ""},
+		{&v.ViewsHist, "views", ""},
+		{&v.VisitsHist, "visits", ""},
 	} {
 		items, err := h.Stats.Histogram(ctx, product, v.From, v.To, q.metric)
 		if err != nil {
 			return nil, err
 		}
-		*q.dst = newColumnChart(q.title, items)
+		*q.dst = histogram(q.metric, items, days > 1)
 	}
 	return v, nil
 }

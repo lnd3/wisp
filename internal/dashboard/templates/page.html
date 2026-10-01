@@ -190,18 +190,20 @@
 {{define "columns"}}
 <section class="card">
   <h2>{{.Title}}</h2>
-  <p class="sub">{{.Subtitle}}</p>
+  <p class="sub">{{.Subtitle}}{{if .MultiDay}} {{.MultiDay}}{{end}}</p>
   {{if .Columns}}
   <div class="columns">
     {{$unit := .Unit}}
     {{range .Columns}}
-    <div class="col" tabindex="0" data-value="{{.Value}} {{$unit}}" data-label="{{.Label}}">
+    <div class="col" tabindex="0" data-value="{{.Value}} {{$unit}}{{if .Share}} ({{.Share}}){{end}}" data-label="{{.Tip}}">
       <span class="col-value">{{.Value}}</span>
       <span class="col-bar" style="height: {{pct .Pct}}%"></span>
       <span class="col-label">{{.Label}}</span>
     </div>
     {{end}}
   </div>
+  <p class="axis-caption">{{.Axis}}</p>
+  {{if .Takeaway}}<p class="takeaway">{{.Takeaway}}</p>{{end}}
   {{else}}<p class="none">Nothing in this range.</p>{{end}}
 </section>
 {{end}}

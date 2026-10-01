@@ -326,6 +326,14 @@ verified with jsdom rather than assumed correct from reading the code.
 
 ## Log
 
+2026-10-01 (later) — User feedback: the histogram ("bucket") charts
+were unintuitive. Each now has a question as its title ("How many
+different pages did people open?"), a sentence on what a bar counts,
+an axis caption, tooltips like "4-5 pages · 23 visitors (14%)", and a
+takeaway ("Most common: 1 page, 42% of visitors."). The History
+version adds why multi-day counts are visitor-days. The copy lives in
+one place (`histogramCopy`) so both tabs say the same thing.
+
 2026-10-01 (later) — User decisions: per-product salts, and IP +
 User-Agent only as key inputs. Older questions already answered by the
 implementation (day boundary, stats DB layout, wire format, rotation

@@ -130,6 +130,8 @@ h2 { font-size: 14px; font-weight: 600; margin: 0; }
 .col:hover { background: var(--hover); }
 .col-bar { width: min(24px, 70%); background: var(--series); border-radius: 4px 4px 0 0; flex: none; max-height: calc(100% - 18px); }
 .col-value { color: var(--ink); font-size: 11px; margin-bottom: 3px; font-variant-numeric: tabular-nums; }
+.axis-caption { text-align: center; color: var(--muted); font-size: 11px; margin: 0 0 8px; }
+.takeaway { color: var(--ink-2); font-size: 13px; margin: 0; }
 .col-label { position: absolute; top: calc(100% + 5px); color: var(--muted); font-size: 11px; white-space: nowrap; }
 
 .table-view { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 10px 16px; }

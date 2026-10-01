@@ -142,7 +142,7 @@ func (h *Handler) buildToday(ctx context.Context, v *view, product string, regis
 	t.Browsers = newBarList("Browsers", "Visitors", "visitors", agents("browser"), false)
 	t.OSes = newBarList("Operating systems", "Visitors", "visitors", agents("os"), false)
 	t.Devices = newBarList("Devices", "Visitors", "visitors", agents("device"), false)
-	hist := func(metric, title string) columnChart {
+	hist := func(metric string) columnChart {
 		var out []stats.RangeItem
 		for _, b := range sum.Hist {
 			if b.Metric == metric {
@@ -150,13 +150,11 @@ func (h *Handler) buildToday(ctx context.Context, v *view, product string, regis
 			}
 		}
 		sort.Slice(out, func(i, j int) bool { return stats.BucketOrder(out[i].Label) < stats.BucketOrder(out[j].Label) })
-		c := newColumnChart(title, out)
-		c.Subtitle, c.Unit = "Visitors in each bucket", "visitors"
-		return c
+		return histogram(metric, out, false)
 	}
-	t.PagesHist = hist("pages", "Distinct pages per visitor")
-	t.ViewsHist = hist("views", "Views per visitor")
-	t.VisitsHist = hist("visits", "Visits per visitor")
+	t.PagesHist = hist("pages")
+	t.ViewsHist = hist("views")
+	t.VisitsHist = hist("visits")
 	return nil
 }
 
