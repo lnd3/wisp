@@ -75,8 +75,13 @@ full technical design.
     superplan). **Open dependency:** the alert
     delivery path. Push notifications must not route through something
     hosted on `bh2` (or on `rbserver1` alone), or that machine's outage
-    silences its own alert. Still undecided: ownership (wisp vs. a
-    separate project) and the alert channel. No design or build yet.
+    silences its own alert. **Decided 2026-10-01 (user):** wisp owns this, and
+    the tool is uptime-kuma, reused rather than built custom. Nothing
+    else is taken from ailab. Deploy tooling: `deploy/uptime-kuma/`
+    (generic, any host over SSH; the user deploys it on `rbserver1`).
+    Still open: the alert channel (must be third-party; chosen in
+    uptime-kuma's UI) and whether to add the second, off-`rbserver1`
+    instance as a dead-man's switch for offgrid's blind spot.
 
 ## Linked
 
@@ -134,6 +139,14 @@ full technical design.
 - [x] wisp counts its own landing page with its own hook (product
       `wisp`): `internal/site`, served by `wisp serve`
 - [ ] Bot/crawler filtering (likely product-side now, before aggregation)
+
+### Phase 4 — External uptime monitoring (P001 scope item, decided 2026-10-01)
+- [x] Deploy tooling: `deploy/uptime-kuma/` (compose file, `deploy.sh`,
+      README with a first-run monitor checklist). Tested locally
+- [ ] Deploy on `rbserver1` (user), create admin, pick a third-party
+      alert channel, add the README's monitors
+- [ ] Decide on the off-`rbserver1` dead-man's-switch instance (offgrid
+      blind spot)
 
 ### Phase 3 — Storage, rollups, dashboard
 - [x] Day close + product statistics DB (D002 §4–5): `internal/stats`,
@@ -325,4 +338,25 @@ offgrid blind spot gets a dead-man's-switch mitigation (alert on
 silence, receiver not on `rbserver1`). Added here: the symmetric
 `rbserver1`-probes / `bh2`-receives candidate, and the alert-delivery
 path as the remaining shared dependency. Still not a build request.
+
+2026-10-01 (later) — **Health monitoring decided and tooled.** The user
+chose wisp as owner and uptime-kuma as the tool, via superplan's
+decision note `wisp-decision-20261001T191904Z`, confirmed directly:
+"I want a deploy script that uses uptime-kuma … I can deploy it
+wherever I like. But I'll be putting it on rbserver1." Also: "We're
+not gonna be using ailab anything, except uptime-kuma."
+- **Built** `deploy/uptime-kuma/`: a generic SSH deploy with its own
+  Compose project, `--port`/`--bind` remembered on the host, refusal
+  of a taken port, pull-and-recreate as the update path, and `data/`
+  never touched.
+- **Adapted from** superplan's seed (`wisp-seed-20261001T192013Z`):
+  dropped its fixed container name, added validation and the port
+  guard.
+- **Correction:** I first assumed `rbserver1` already ran ailab's
+  uptime-kuma, because the SSH user names match. The user is only now
+  installing Docker there, so ailab's Pi is a different machine.
+- **README:** a first-run checklist covering a third-party alert
+  channel and public-URL monitors for every product (all 11 URLs
+  verified live), plus a DNS monitor for EphemNet's nameserver,
+  certificate-expiry alerts, and the offgrid co-location blind spot.
 

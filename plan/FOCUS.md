@@ -32,8 +32,12 @@
 
 ## Next
 
-1. After 2026-10-02 02:10 UTC: check that the dashboard shows
-   cinderapps and wisp for 2026-10-01, and the close log line.
-2. offgrid's A012 (ready). Then EphemNet/persona once they have Go
-   handlers.
-3. D002 remaining: confirm the proposed numeric values (flush interval, grace, buckets, limits); country/GeoIP still undecided.
+1. After 2026-10-02 02:10 UTC: check that the dashboard History shows
+   cinderapps, offgridapp and wisp for 2026-10-01, plus the close log
+   lines.
+2. Uptime monitoring: the user deploys `deploy/uptime-kuma/` on
+   `rbserver1` and picks a third-party alert channel. Then decide on
+   the off-`rbserver1` dead-man's-switch instance.
+3. EphemNet/persona integrations once they have Go handlers.
+4. D002 remaining: confirm the proposed numeric values; country/GeoIP
+   undecided.
