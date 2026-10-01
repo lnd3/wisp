@@ -483,3 +483,11 @@ request), plus SIGHUP.
   miss editors that save by rename. `deploy.sh` migrates the old
   layout once.
 
+2026-10-01 (later) — Reload feature live on rbserver1. The first deploy
+attempt was correctly refused by the pre-flight: the user had just
+added a `demo.offgridapp` check with missing commas. Once they fixed
+it: 15 checks, all up. The live reload POST returns 303 with "0 added,
+0 removed, 0 changed"; a cross-site POST returns 403. The config now
+sits in `/opt/uptime-wisp/config/` (directory mount; migrated by
+deploy.sh).
+
