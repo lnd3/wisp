@@ -371,3 +371,14 @@ because the bare `rbserver1` doesn't resolve under WSL. Host-key
 checking was kept via `HostKeyAlias=rbserver1`. Now waiting on the
 user's first-run setup in the web UI.
 
+2026-10-01 (later) — **uptime-kuma moved to the maintained 2.x line**
+(`louislam/uptime-kuma:2`, now 2.5.5), after uptime-kuma's own UI
+warned that the `:1`/`latest` tags point at end-of-life v1 with no
+security fixes. The v1 database was empty (0 users, monitors and
+notifications), backed up anyway to
+`/opt/uptime-kuma/backup-v1-20261001T193827Z.tgz`, and migrated
+cleanly on first v2 start. The unused v1 image was removed from the
+Pi. `deploy.sh` now also prunes dangling images after each update.
+The README warns against `1`/`latest`, and to back up before any
+major-version switch.
+

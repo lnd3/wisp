@@ -30,7 +30,11 @@ deploy/uptime-kuma/deploy.sh user@host /srv/kuma --bind=127.0.0.1   # behind a T
 ```
 
 - Re-running **is** the update. It pulls the latest
-  `louislam/uptime-kuma:1` and recreates the container.
+  `louislam/uptime-kuma:2` (the maintained 2.x line) and recreates
+  the container. **Don't** switch the tag to `1` or `latest`: both
+  still point at v1, which is end-of-life with no security fixes. A
+  major-version switch migrates the database one-way, so back up
+  `data/` first (see Backup).
 - The host's `data/` directory holds all monitors, notification
   channels and history. The script never syncs, overwrites or deletes
   it.

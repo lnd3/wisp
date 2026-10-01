@@ -31,3 +31,4 @@ Format: `YYYY-MM-DD | ID | old_status → new_status | note`
 2026-10-01 | P001 | IN_PROGRESS → IN_PROGRESS | Health monitoring: placement candidate rbserver1 (user); dead-man's-switch for offgrid co-location; open: alert delivery path must not depend on bh2/rbserver1 alone
 2026-10-01 | P001 | IN_PROGRESS → IN_PROGRESS | Health monitoring decided (user): wisp owns it, uptime-kuma; deploy/uptime-kuma/ tooling added (generic SSH deploy, tested locally); user deploys on rbserver1
 2026-10-01 | P001 | IN_PROGRESS → IN_PROGRESS | uptime-kuma deployed on rbserver1:/opt/uptime-kuma (healthy); awaiting user's first-run setup (admin, alert channel, monitors)
+2026-10-01 | P001 | IN_PROGRESS → IN_PROGRESS | uptime-kuma switched to maintained :2 (v1 EOL); empty v1 DB backed up + migrated; v1 image removed

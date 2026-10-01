@@ -1,14 +1,15 @@
 #!/usr/bin/env bash
-# Deploy (or update) wisp's uptime-kuma instance on any host over SSH.
-# Sync the compose file over SSH and apply it remotely. Host
-# prerequisites: Docker with the Compose v2 plugin
-# (`docker compose`), rsync, and the SSH user in the docker group. No git and no build on the host: it only pulls the
-# louislam/uptime-kuma:1 image.
+# Deploy (or update) wisp's uptime-kuma instance on any host over SSH:
+# sync the compose file and apply it remotely. No git and no build on
+# the host: it only pulls the louislam/uptime-kuma:2 image.
+#
+# Host prerequisites: Docker with the Compose v2 plugin
+# (`docker compose`), rsync, and the SSH user in the docker group.
 #
 # Re-running is safe and is also how you update: it pulls the latest
-# 1.x image and recreates the container. The host's data/ directory (all
-# monitors, channels and history) is never synced, overwritten or
-# deleted.
+# 2.x image, recreates the container, and prunes the superseded
+# (dangling) image. The host's data/ directory (all monitors, channels
+# and history) is never synced, overwritten or deleted.
 set -euo pipefail
 
 usage() {
@@ -89,7 +90,7 @@ if [ "${OURS##*:}" != "$PORT" ] && ssh "$TARGET" "ss -tlnH 2>/dev/null | awk '{p
 fi
 
 # Informational: other uptime-kuma containers already on the host.
-OTHERS="$(ssh "$TARGET" "docker ps --filter ancestor=louislam/uptime-kuma:1 --format '{{.Names}} ({{.Ports}})' | grep -v '^$PROJECT-' || true")"
+OTHERS="$(ssh "$TARGET" "docker ps --format '{{.Image}} {{.Names}} ({{.Ports}})' | grep '^louislam/uptime-kuma' | cut -d' ' -f2- | grep -v '^$PROJECT-' || true")"
 if [ -n "$OTHERS" ]; then
 	echo "    note: another uptime-kuma is already running here: $OTHERS"
 	echo "    (this deploy runs alongside it as project '$PROJECT' on port $PORT)"
@@ -100,7 +101,9 @@ rsync -az "$SCRIPT_DIR/docker-compose.yml" "$TARGET:$REMOTE_DIR/docker-compose.y
 printf 'KUMA_PORT=%s\nKUMA_BIND=%s\n' "$PORT" "$BIND" | ssh "$TARGET" "cat > '$REMOTE_DIR/.env'"
 
 echo "==> Pulling the image and (re)starting..."
-ssh "$TARGET" "cd '$REMOTE_DIR' && $COMPOSE pull -q && $COMPOSE up -d && $COMPOSE ps"
+# image prune -f removes only untagged images, e.g. the previous 2.x
+# after an update pulled a newer one. Never a tagged or in-use image.
+ssh "$TARGET" "cd '$REMOTE_DIR' && $COMPOSE pull -q && $COMPOSE up -d && docker image prune -f >/dev/null && $COMPOSE ps"
 
 HOSTPART="${TARGET#*@}"
 [ "$BIND" = "0.0.0.0" ] || HOSTPART="$BIND"
