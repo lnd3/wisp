@@ -18,3 +18,4 @@ Format: `YYYY-MM-DD | ID | old_status → new_status | note`
 2026-09-30 | D002 | PLANNING → PLANNING | Day close + stats DB implemented (internal/stats, internal/dayclose); stats engine resolved: SQLite. Interim unaggregated sweep removed
 2026-09-30 | P001 | PLANNING → PLANNING | Dashboard implemented; MVP complete in code (hook → ingest → staging → day close → stats → dashboard). Remaining: DNS, deploy, first product integration
 2026-10-01 | P001 | PLANNING → IN_PROGRESS | Deployed to bh2 /opt/wisp/live (119ba44); verified internally; public TLS blocked on wisp.mera.network DNS entry (EphemNet zones.json)
+2026-10-01 | P001 | IN_PROGRESS → IN_PROGRESS | Publicly live at https://wisp.mera.network (DNS added by user, LE cert issued); Phase 0 complete; external checklist passed

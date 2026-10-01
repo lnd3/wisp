@@ -11,9 +11,9 @@
   `deploy/`, adapted from persona/EphemNet/cinder, with ports and
   subnet checked live on `bh2`. It serves a placeholder page until an
   ingest API exists.
-- **wisp is deployed on bh2** (2026-10-01, `/opt/wisp/live`). Both
-  containers run, and ingest, dashboard and logging are verified
-  internally. It can't be reached by name yet (no DNS, so no TLS).
+- **wisp is live at https://wisp.mera.network** (bh2,
+  `/opt/wisp/live`, build `119ba44`). Public checks have passed. No
+  product reports to it yet, so the dashboard shows no closed days.
 - **D001's revision to backend-only ingest.** Products' servers send
   unique events or (preferably) aggregates. No browser ever talks to
   wisp.
@@ -21,11 +21,6 @@
 ---
 
 ## Blocked
-
-- **TLS / public reachability.** `wisp.mera.network` needs a zone
-  entry in bh2's EphemNet `zones.json` (direct mode, 158.174.211.245).
-  That's EphemNet production data and awaits the user's go-ahead.
-  Once it exists, restart wisp-caddy so it retries ACME at once.
 
 - **D002 open questions (not blocking deploy).** The wire format is
   implemented. Still open, because they touch CLAUDE.md's invariants:
@@ -36,10 +31,11 @@
 
 ## Next
 
-1. Add the `wisp.mera.network` zone entry (EphemNet side), restart
-   wisp-caddy, then run the remaining checks: real cert, dashboard
-   401/200 through Caddy, ingest 401 from outside.
-2. Wire the hook into a first product (persona is the smallest): add
-   it to `products.json`, then restart wisp.
+1. Wire the hook into a first product (persona is the smallest):
+   generate its token, add its hash to `/opt/wisp/live/deploy/products.json`,
+   restart wisp, set `WISP_TOKEN` in the product's own `.env`, call
+   `View`/`Download` at its key handlers, then deploy the product.
+2. Watch the first real day close (next day 02:00 UTC + up to 10 min)
+   and show on the dashboard.
 3. Settle D002's open questions: key fields beyond IP+UA, salt scope,
    restart behaviour, and the proposed values.

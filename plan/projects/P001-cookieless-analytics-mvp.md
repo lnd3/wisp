@@ -70,15 +70,14 @@ full technical design.
 ### Phase 0 — Deployment
 - [x] Deployment tooling adapted from `persona`/`EphemNet`/`cinder`
       (`deploy/`) — ports/subnet checked live on `bh2`
-- [ ] `wisp.mera.network` zone entry in `bh2`'s EphemNet `zones.json`
-      (EphemNet-side operator step — see `deploy/README.md`)
+- [x] `wisp.mera.network` zone entry in `bh2`'s EphemNet `zones.json`
+      (added by the user, 2026-10-01)
 - [x] First live deploy (2026-10-01, commit 119ba44): both containers up
       on bh2 at /opt/wisp/live. Verified: ingest 401 and dashboard 200
       on the internal network, http→https 301 via nginx, 0 `remote_ip`
       in Caddy's log, 0 wisp lines in nginx's access.log
-- [ ] TLS certificate: blocked on the DNS entry below; Caddy retries
-      ACME automatically (restart wisp-caddy once DNS exists to skip
-      its backoff)
+- [x] TLS certificate: Let's Encrypt, issued ~15s after a wisp-caddy
+      restart once DNS existed; full external checklist passed
 
 ### Phase 1 — Design decisions
 - [ ] Decide build-vs-adopt for real (see D001's Open Questions) —
@@ -181,4 +180,19 @@ no zone entry in EphemNet's live `zones.json`. bh2's ephemnetd answers
 it with the same synthesized SOA as an unregistered name, so Let's
 Encrypt gets NXDOMAIN. Adding that entry changes EphemNet's production
 data, so it was left for the user to authorize.
+
+2026-10-01 (later) — **Publicly live at https://wisp.mera.network.**
+The user added the zone entry, and a wisp-caddy restart got a Let's
+Encrypt cert in ~15s. External checks against `deploy/README.md`'s
+list all passed:
+- The landing footer shows build `119ba44`.
+- http gives a 301 to https.
+- Ingest returns 401 without a token and 405 for GET.
+- The dashboard returns 401 without or with wrong credentials, and
+  200 with the right ones.
+- No `Set-Cookie` anywhere.
+- The tester's own IP appears in none of: Caddy's log, wisp's log,
+  nginx's access.log.
+
+Phase 0 is done. Next: wire the hook into a first product.
 
