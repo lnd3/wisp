@@ -30,6 +30,7 @@ import (
 	"github.com/lnd3/wisp/hook"
 	"github.com/lnd3/wisp/internal/dashboard"
 	"github.com/lnd3/wisp/internal/dayclose"
+	"github.com/lnd3/wisp/internal/events"
 	"github.com/lnd3/wisp/internal/ingest"
 	"github.com/lnd3/wisp/internal/registry"
 	"github.com/lnd3/wisp/internal/site"
@@ -88,6 +89,9 @@ func serve(args []string) error {
 	}
 
 	logger := log.New(os.Stderr, "wisp: ", log.LstdFlags|log.LUTC)
+	// Operator-facing issue log for the dashboard (in memory; no request
+	// data ever goes in).
+	issues := events.New(nil)
 
 	reg, err := registry.Load(*regPath)
 	if err != nil {
@@ -107,17 +111,24 @@ func serve(args []string) error {
 		return err
 	}
 	defer statsDB.Close()
-	closer := &dayclose.Closer{Staging: store, Stats: statsDB, Log: logger}
+	closer := &dayclose.Closer{Staging: store, Stats: statsDB, Log: logger, Events: issues}
 
 	h := &ingest.Handler{
 		Registry: func() ingest.Registry { return current.Load() },
 		Stager:   store,
 		Log:      logger,
+		Events:   issues,
 	}
 	mux := h.Routes()
 	// Read-only dashboard over the stats DB. Access control is Caddy's
 	// basic_auth in front of /dashboard/; only Caddy can reach wisp.
-	(&dashboard.Handler{Stats: statsDB, Log: logger}).Register(mux)
+	(&dashboard.Handler{
+		Stats:      statsDB,
+		Log:        logger,
+		Today:      store,
+		Events:     issues,
+		Registered: func() []string { return current.Load().Products() },
+	}).Register(mux)
 
 	// wisp's own landing page, counted by wisp's own hook. The token is
 	// a product token like any other (WISP_TOKEN, registered as "wisp"
@@ -135,7 +146,11 @@ func serve(args []string) error {
 			ProductKey: "wisp",
 			Token:      os.Getenv("WISP_TOKEN"),
 			ClientIP:   site.TrustedClientIP(trusted),
-			OnError:    func(err error) { logger.Printf("self-report: %v", err) }, // hook errors never carry request data
+			// Hook errors never carry request data.
+			OnError: func(err error) {
+				logger.Printf("self-report: %v", err)
+				issues.Record(events.Warning, "self-report", "wisp", err.Error())
+			},
 		})
 		if err != nil {
 			return err
@@ -164,6 +179,7 @@ func serve(args []string) error {
 			r, err := registry.Load(*regPath)
 			if err != nil {
 				logger.Printf("registry reload failed, keeping the previous one: %v", err)
+				issues.Record(events.Error, "registry", "", "reload failed; still using the previous registry (see wisp's log)")
 				continue
 			}
 			current.Store(r)

@@ -40,7 +40,7 @@ body {
   font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 .top, main { max-width: 1120px; margin: 0 auto; padding: 0 16px; }
-.top { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px; padding-top: 20px; padding-bottom: 12px; }
+.top { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; padding-top: 20px; padding-bottom: 12px; }
 h1 { font-size: 18px; font-weight: 600; margin: 0; letter-spacing: -0.01em; }
 h2 { font-size: 14px; font-weight: 600; margin: 0; }
 
@@ -52,6 +52,30 @@ h2 { font-size: 14px; font-weight: 600; margin: 0; }
 .seg a[aria-current="page"] { color: var(--ink); font-weight: 600; background: var(--hover); }
 .seg a:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--series); outline-offset: 2px; }
 
+/* Tabs: the view switch, separate from the filters it sits above. */
+.tabs { flex: none; }
+/* Status palette (reference): never color alone — always an icon + a label. */
+.status { display: inline-grid; place-items: center; width: 16px; height: 16px; border-radius: 50%; font-size: 11px; font-weight: 700; color: #fff; vertical-align: -2px; }
+.status-error { background: #d03b3b; }
+.status-warning { background: #fab219; color: #0b0b0b; }
+.banner { background: var(--surface); border: 1px solid var(--border); border-left: 3px solid #d03b3b; border-radius: 8px; padding: 8px 12px; margin: 4px 0 12px; color: var(--ink); }
+.banner a { color: var(--ink); }
+.table-card table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+.table-card th, .table-card td { text-align: left; padding: 6px 8px; border-top: 1px solid var(--grid); vertical-align: top; }
+.table-card thead th { color: var(--muted); font-weight: 500; border-top: 0; }
+.table-card tbody th { font-weight: 500; }
+.table-card { overflow-x: auto; margin-top: 16px; }
+.issues td:nth-child(4) { min-width: 18ch; }
+/* Narrow screens: one stacked, labelled block per issue instead of a
+   seven-column table that would scroll inside its card. */
+@media (max-width: 640px) {
+  .issues thead { display: none; }
+  .issues tr { display: block; padding: 8px 0; border-top: 1px solid var(--grid); }
+  .issues tbody tr:first-child { border-top: 0; }
+  .issues td { display: grid; grid-template-columns: 9em 1fr; gap: 8px; border: 0; padding: 2px 0; }
+  .issues td::before { content: attr(data-label); color: var(--muted); }
+  .issues td:nth-child(4) { min-width: 0; }
+}
 .scope { color: var(--ink-2); margin: 4px 0 16px; max-width: 80ch; }
 .empty { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 24px; margin-top: 12px; }
 .empty p { color: var(--ink-2); max-width: 65ch; }

@@ -25,6 +25,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/lnd3/wisp/internal/events"
 	"github.com/lnd3/wisp/internal/stats"
 )
 
@@ -48,7 +49,15 @@ const (
 type Handler struct {
 	Stats *stats.DB
 	Log   *log.Logger // internal failures only
+	// Optional, for the "Today so far" and "Issues" tabs:
+	Today      TodaySource     // today's open staging, summarized keylessly
+	Events     *events.Log     // issue log + per-product ingest status
+	Registered func() []string // registered product keys
+	Now        func() time.Time
 }
+
+// Views are the dashboard's tabs.
+var Views = []string{"history", "today", "issues"}
 
 var tmpl = template.Must(template.New("page.html").Funcs(template.FuncMap{
 	"pct": func(f float64) string { return strconv.FormatFloat(f, 'f', 2, 64) },
@@ -84,13 +93,36 @@ func (h *Handler) page(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) render(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	now := time.Now().UTC()
+	if h.Now != nil {
+		now = h.Now().UTC()
+	}
 	products, err := h.Stats.Products(ctx)
 	if err != nil {
 		h.fail(w, err)
 		return
 	}
+	// The selector offers every product with closed days, open staging
+	// today, or a registration — so a newly wired product shows up on
+	// "Today so far" before its first day closes.
+	var registered []string
+	if h.Registered != nil {
+		registered = h.Registered()
+	}
+	all := append([]string(nil), products...)
+	all = append(all, registered...)
+	if h.Today != nil {
+		if days, err := h.Today.Days(); err == nil {
+			for _, d := range days {
+				all = append(all, d.Product)
+			}
+		}
+	}
+	slices.Sort(all)
+	all = slices.Compact(all)
+
 	product := r.URL.Query().Get("product")
-	if product != "" && !slices.Contains(products, product) {
+	if product != "" && !slices.Contains(all, product) {
 		http.Error(w, "unknown product", http.StatusNotFound)
 		return
 	}
@@ -98,12 +130,27 @@ func (h *Handler) render(w http.ResponseWriter, r *http.Request) {
 	if d, err := strconv.Atoi(r.URL.Query().Get("days")); err == nil && slices.Contains(Ranges, d) {
 		days = d
 	}
+	viewName := r.URL.Query().Get("view")
+	if !slices.Contains(Views, viewName) {
+		viewName = "history"
+	}
 
-	v, err := h.build(ctx, products, product, days)
+	v, err := h.build(ctx, all, product, days, viewName)
 	if err != nil {
 		h.fail(w, err)
 		return
 	}
+	switch viewName {
+	case "today":
+		err = h.buildToday(ctx, v, product, registered, now)
+	case "issues":
+		h.buildIssues(v)
+	}
+	if err != nil {
+		h.fail(w, err)
+		return
+	}
+	v.Errors, v.Warnings = h.Events.Counts(now.Add(-24 * time.Hour))
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := tmpl.Execute(w, v); err != nil && h.Log != nil {
 		h.Log.Printf("dashboard: render: %v", err)
@@ -114,6 +161,7 @@ func (h *Handler) fail(w http.ResponseWriter, err error) {
 	if h.Log != nil {
 		h.Log.Printf("dashboard: %v", err)
 	}
+	h.Events.Record(events.Error, "dashboard", "", "a dashboard page failed to render (see wisp's log)")
 	http.Error(w, "internal error", http.StatusInternalServerError)
 }
 
@@ -132,6 +180,13 @@ type tile struct {
 }
 
 type view struct {
+	View         string // "history" | "today" | "issues"
+	Tabs         []link
+	Errors       int // distinct error entries seen in the last 24h
+	Warnings     int
+	Today        *todayView
+	Issues       []issueRow
+	IssuesSince  string
 	Products     []link
 	Ranges       []link
 	ProductLabel string
@@ -153,17 +208,32 @@ type view struct {
 	VisitsHist   columnChart
 }
 
-func (h *Handler) build(ctx context.Context, products []string, product string, days int) (*view, error) {
-	v := &view{Days: days, ProductLabel: "All products"}
+func (h *Handler) build(ctx context.Context, products []string, product string, days int, viewName string) (*view, error) {
+	v := &view{Days: days, ProductLabel: "All products", View: viewName}
 	if product != "" {
 		v.ProductLabel = product
 	}
-	href := func(p string, d int) string {
+	hrefView := func(p string, d int, vn string) string {
 		q := url.Values{"days": {strconv.Itoa(d)}}
 		if p != "" {
 			q.Set("product", p)
 		}
+		if vn != "history" {
+			q.Set("view", vn)
+		}
 		return "/dashboard/?" + q.Encode()
+	}
+	href := func(p string, d int) string { return hrefView(p, d, viewName) }
+	for _, t := range []struct{ name, label string }{{"history", "History"}, {"today", "Today so far"}, {"issues", "Issues"}} {
+		v.Tabs = append(v.Tabs, link{t.label, hrefView(product, days, t.name), t.name == viewName})
+	}
+	if viewName != "history" {
+		// Only the history tab reads closed days; skip its queries.
+		v.Products = append(v.Products, link{"All products", href("", days), product == ""})
+		for _, p := range products {
+			v.Products = append(v.Products, link{p, href(p, days), p == product})
+		}
+		return v, nil
 	}
 	v.Products = append(v.Products, link{"All products", href("", days), product == ""})
 	for _, p := range products {

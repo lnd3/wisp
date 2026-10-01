@@ -267,3 +267,23 @@ registry incident and its fix.**
   counted (bot list), which looked like "self-report not working"
   until tested with a browser UA.
 
+2026-10-01 (later) — **Dashboard: "Today so far" and "Issues" tabs**,
+per the user.
+- **Today so far** summarizes today's open staging per product, with
+  the same keyless `staging.Summarize` the day close uses. Visitor
+  keys never reach the dashboard; a test renders from a real staging
+  store and fails on any key. It shows tiles, bars and histograms,
+  where a single day's distinct visitors are honestly "visitors", and
+  sums across products are labelled as such. It also has an ingest
+  status table: last accepted batch per registered product.
+- **Issues:** a new in-memory `internal/events` log (deduplicated,
+  bounded, no request data), fed by ingest rejections and failures,
+  the day close (retrying / UNAGGREGATED / undeletable), registry
+  reload failures and wisp's self-report hook. Errors in the last 24h
+  show as a banner on every tab.
+- Rendered and inspected in headless Chromium. The mobile Issues table
+  was reworked into stacked rows.
+- Also updated all four product integration notes (cinder A022,
+  offgrid A012, EphemNet A006, persona A010) to register via
+  `ops.sh register`.
+

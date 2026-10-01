@@ -34,10 +34,7 @@
 
 1. After 2026-10-02 02:10 UTC: check that the dashboard shows
    cinderapps and wisp for 2026-10-01, and the close log line.
-2. Update the four product integration notes (cinder A022, offgrid
-   A012, EphemNet A006, persona A010): step 6 should use
-   `ops.sh register` instead of hand-editing `products.json`.
-3. offgrid's A012 (ready). Then EphemNet/persona once they have Go
+2. offgrid's A012 (ready). Then EphemNet/persona once they have Go
    handlers.
-4. Settle D002's open questions: key fields, salt scope, restart
+3. Settle D002's open questions: key fields, salt scope, restart
    behaviour, proposed values.

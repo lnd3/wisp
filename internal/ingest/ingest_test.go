@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/lnd3/wisp/hook"
+	"github.com/lnd3/wisp/internal/events"
 	"github.com/lnd3/wisp/internal/registry"
 	"github.com/lnd3/wisp/internal/staging"
 )
@@ -290,5 +291,45 @@ func TestSealedDayIs409(t *testing.T) {
 	}
 	if f.logs.Len() != 0 {
 		t.Errorf("a sealed day is not an internal error; logged %q", f.logs.String())
+	}
+}
+
+func TestIssueFeed(t *testing.T) {
+	f := newFixture(t, "2026-10-01T12:00:00Z")
+	ev := events.New(nil)
+	// newFixture's handler has no Events; rebuild one around the same store.
+	reg, _ := registry.Parse([]byte(`{"products":[{"key":"cindernote","token_sha256":["` + registry.HashToken(tokenCinder) + `"]},{"key":"persona","token_sha256":["` + registry.HashToken(tokenPersona) + `"]}]}`))
+	ts, _ := time.Parse(time.RFC3339, "2026-10-01T12:00:00Z")
+	h := &Handler{Registry: func() Registry { return reg }, Stager: f.store, Events: ev, Now: func() time.Time { return ts }}
+	srv := httptest.NewServer(h.Routes())
+	defer srv.Close()
+	f.srv = srv
+
+	f.post(t, "nope", goodBatch())       // 401 unknown token
+	f.post(t, tokenPersona, goodBatch()) // 401 token for another product
+	bad := goodBatch()
+	bad.Visitors[0].K = "203.0.113.7"
+	f.post(t, tokenCinder, bad)         // 400
+	f.post(t, tokenCinder, goodBatch()) // accepted
+	f.post(t, tokenCinder, goodBatch()) // duplicate, still a delivery
+
+	got := map[string]string{}
+	for _, e := range ev.Entries() {
+		got[e.Product+"|"+e.Message] = e.Level
+		if strings.Contains(e.Message, "203.0.113.7") || strings.Contains(e.Message, tokenCinder) || strings.Contains(e.Message, "nope") {
+			t.Errorf("issue message carries request data: %q", e.Message)
+		}
+	}
+	for _, want := range []string{
+		"|rejected: missing or unknown token (401)",
+		"persona|rejected: token used with another product key (401)",
+		"cindernote|rejected: invalid visitor key (400)",
+	} {
+		if got[want] != events.Warning {
+			t.Errorf("missing warning %q; have %v", want, got)
+		}
+	}
+	if d := ev.Deliveries()["cindernote"]; d.Batches != 2 {
+		t.Errorf("deliveries = %+v, want 2 (accepted + duplicate)", d)
 	}
 }

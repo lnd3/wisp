@@ -115,12 +115,12 @@ func (s *DB) Histogram(ctx context.Context, product, from, to, metric string) ([
 	if err != nil {
 		return nil, err
 	}
-	sort.Slice(items, func(i, j int) bool { return bucketOrder(items[i].Label) < bucketOrder(items[j].Label) })
+	sort.Slice(items, func(i, j int) bool { return BucketOrder(items[i].Label) < BucketOrder(items[j].Label) })
 	return items, nil
 }
 
-// bucketOrder sorts "0", "1", "4-5", "21+", "4+" by their lower bound.
-func bucketOrder(b string) int {
+// BucketOrder sorts "0", "1", "4-5", "21+", "4+" by their lower bound.
+func BucketOrder(b string) int {
 	n, _ := strconv.Atoi(strings.TrimRight(strings.SplitN(b, "-", 2)[0], "+"))
 	return n
 }

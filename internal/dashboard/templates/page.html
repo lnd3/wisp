@@ -11,34 +11,38 @@
 <body>
 <header class="top">
   <h1>wisp</h1>
+  <nav class="seg tabs" aria-label="View">
+    {{range .Tabs}}<a href="{{.URL}}"{{if .Selected}} aria-current="page"{{end}}>{{.Label}}{{if eq .Label "Issues"}}{{if or $.Errors $.Warnings}} ({{if $.Errors}}{{$.Errors}} error{{if ne $.Errors 1}}s{{end}}{{if $.Warnings}}, {{end}}{{end}}{{if $.Warnings}}{{$.Warnings}} warning{{if ne $.Warnings 1}}s{{end}}{{end}}){{end}}{{end}}</a>{{end}}
+  </nav>
+  {{if ne .View "issues"}}
   <nav class="filters" aria-label="Filters">
     <div class="seg" role="group" aria-label="Product">
       {{range .Products}}<a href="{{.URL}}"{{if .Selected}} aria-current="page"{{end}}>{{.Label}}</a>{{end}}
     </div>
+    {{if eq .View "history"}}
     <div class="seg" role="group" aria-label="Date range">
       {{range .Ranges}}<a href="{{.URL}}"{{if .Selected}} aria-current="page"{{end}}>{{.Label}}</a>{{end}}
     </div>
+    {{end}}
   </nav>
+  {{end}}
 </header>
 
 <main>
+{{if and .Errors (ne .View "issues")}}
+  <p class="banner" role="alert"><span class="status status-error" aria-hidden="true">×</span> {{.Errors}} error{{if ne .Errors 1}}s{{end}} in the last 24 hours. {{range .Tabs}}{{if eq .Label "Issues"}}<a href="{{.URL}}">See Issues</a>{{end}}{{end}}</p>
+{{end}}
+
+{{if eq .View "history"}}
 {{if not .HasData}}
   <section class="empty">
     <h2>No closed days yet</h2>
-    <p>A day's statistics appear once it closes, 26 hours after it starts (the day plus a 2-hour grace for late batches). Until a product's hook has reported a full day, there is nothing to show.</p>
+    <p>A day's statistics appear here once it closes, 26 hours after it starts (the day plus a 2-hour grace for late batches). Until then, see <em>Today so far</em>.</p>
   </section>
 {{else}}
   <p class="scope">{{.ProductLabel}} · {{.From}} to {{.To}} (UTC, closed days only). Visitors are a deliberate lower bound. Figures summed over several days are <strong>visitor-days</strong>, not unique people: the same person on two days counts twice, by design.</p>
 
-  <section class="tiles" aria-label="Summary">
-    {{range .Tiles}}
-    <div class="tile">
-      <div class="tile-label">{{.Label}}</div>
-      <div class="tile-value">{{.Value}}</div>
-      {{if .Note}}<div class="tile-note">{{.Note}}</div>{{end}}
-    </div>
-    {{end}}
-  </section>
+  {{template "tiles" .Tiles}}
 
   {{template "line" .Visitors}}
   {{template "line" .Views}}
@@ -70,10 +74,73 @@
     {{template "columns" .VisitsHist}}
   </div>
 {{end}}
+{{end}}
+
+{{if eq .View "today"}}{{with .Today}}
+  <p class="scope">{{$.ProductLabel}} · {{.Date}} (UTC), so far. Live counts from the day's open data, aggregated on the fly. They move to <em>History</em> when the day closes at 02:00 UTC tomorrow.{{range .OpenEarlier}} {{.}} is still open too and closes shortly.{{end}}</p>
+  {{if .HasData}}
+  {{template "tiles" .Tiles}}
+  <div class="grid">
+    {{template "bars" .TopPages}}
+    {{template "bars" .Referrers}}
+    {{template "bars" .Downloads}}
+  </div>
+  <div class="grid three">
+    {{template "bars" .Browsers}}
+    {{template "bars" .OSes}}
+    {{template "bars" .Devices}}
+  </div>
+  <div class="grid three">
+    {{template "columns" .PagesHist}}
+    {{template "columns" .ViewsHist}}
+    {{template "columns" .VisitsHist}}
+  </div>
+  {{else}}
+  <section class="empty"><h2>Nothing received yet today</h2><p>No batch has arrived for {{.Date}}. Hooks send every 5 minutes, and only when there was traffic.</p></section>
+  {{end}}
+  <section class="card table-card">
+    <h2>Ingest status</h2>
+    <p class="sub">Accepted batches per registered product since wisp started ({{.Started}}). A hook sends only when it has data, so a quiet product can go a while without a batch.</p>
+    <table>
+      <thead><tr><th scope="col">Product</th><th scope="col">Last batch</th><th scope="col">Batches</th></tr></thead>
+      <tbody>
+      {{range .Ingest}}<tr><th scope="row">{{.Product}}</th><td>{{.Last}}</td><td>{{.Batches}}</td></tr>
+      {{else}}<tr><td colspan="3">No products registered.</td></tr>{{end}}
+      </tbody>
+    </table>
+  </section>
+{{end}}{{end}}
+
+{{if eq .View "issues"}}
+  <p class="scope">Problems wisp has seen since it started ({{.IssuesSince}}): rejected batches, failed day closes, registry problems. Kept in memory only, deduplicated with counts, and never containing request data. Errors first, then most recent.</p>
+  <section class="card table-card">
+    {{if .Issues}}
+    <table class="issues">
+      <thead><tr><th scope="col">Level</th><th scope="col">Source</th><th scope="col">Product</th><th scope="col">What happened</th><th scope="col">Count</th><th scope="col">First</th><th scope="col">Last</th></tr></thead>
+      <tbody>
+      {{range .Issues}}<tr><td data-label="Level"><span><span class="status status-{{.Level}}" aria-hidden="true">{{if eq .Level "error"}}×{{else}}!{{end}}</span> {{.Label}}</span></td><td data-label="Source">{{.Source}}</td><td data-label="Product">{{.Product}}</td><td data-label="What happened">{{.Message}}</td><td data-label="Count">{{.Count}}</td><td data-label="First">{{.First}}</td><td data-label="Last">{{.Last}}</td></tr>
+      {{end}}
+      </tbody>
+    </table>
+    {{else}}<p class="none">No issues since wisp started.</p>{{end}}
+  </section>
+{{end}}
 </main>
 <div id="tip" class="tip" role="status" hidden><strong class="tip-value"></strong><span class="tip-label"></span></div>
 </body>
 </html>
+
+{{define "tiles"}}
+<section class="tiles" aria-label="Summary">
+  {{range .}}
+  <div class="tile">
+    <div class="tile-label">{{.Label}}</div>
+    <div class="tile-value">{{.Value}}</div>
+    {{if .Note}}<div class="tile-note">{{.Note}}</div>{{end}}
+  </div>
+  {{end}}
+</section>
+{{end}}
 
 {{define "line"}}
 <section class="card">
@@ -108,9 +175,9 @@
   <p class="sub">{{.Subtitle}}</p>
   {{if .Rows}}
   <ol class="bars">
-    {{$show := .ShowVisitorDays}}{{$unit := .CountLabel}}
+    {{$show := .ShowVisitorDays}}{{$unit := .CountLabel}}{{$uu := .UniqueUnit}}
     {{range .Rows}}
-    <li tabindex="0" data-value="{{.Count}} {{$unit}}" data-label="{{if $show}}{{.VisitorDays}} visitor-days · {{end}}{{.Label}}">
+    <li tabindex="0" data-value="{{.Count}} {{$unit}}" data-label="{{if $show}}{{.VisitorDays}} {{$uu}} · {{end}}{{.Label}}">
       <span class="bar-label" title="{{.Label}}">{{.Short}}</span>
       <span class="bar-track"><span class="bar-fill" style="width: {{pct .Pct}}%"></span><span class="bar-value">{{.Count}}</span></span>
     </li>
@@ -123,11 +190,12 @@
 {{define "columns"}}
 <section class="card">
   <h2>{{.Title}}</h2>
-  <p class="sub">Visitor-days in each bucket</p>
+  <p class="sub">{{.Subtitle}}</p>
   {{if .Columns}}
   <div class="columns">
+    {{$unit := .Unit}}
     {{range .Columns}}
-    <div class="col" tabindex="0" data-value="{{.Value}} visitor-days" data-label="{{.Label}}">
+    <div class="col" tabindex="0" data-value="{{.Value}} {{$unit}}" data-label="{{.Label}}">
       <span class="col-value">{{.Value}}</span>
       <span class="col-bar" style="height: {{pct .Pct}}%"></span>
       <span class="col-label">{{.Label}}</span>

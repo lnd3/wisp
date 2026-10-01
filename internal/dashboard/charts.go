@@ -131,11 +131,12 @@ type barList struct {
 	Title, Subtitle string
 	CountLabel      string
 	ShowVisitorDays bool
+	UniqueUnit      string // "visitor-days" (over a range) or "visitors" (one day)
 	Rows            []barRow
 }
 
 func newBarList(title, subtitle, countLabel string, items []stats.RangeItem, showVisitorDays bool) barList {
-	b := barList{Title: title, Subtitle: subtitle, CountLabel: countLabel, ShowVisitorDays: showVisitorDays}
+	b := barList{Title: title, Subtitle: subtitle, CountLabel: countLabel, ShowVisitorDays: showVisitorDays, UniqueUnit: "visitor-days"}
 	max := 0
 	for _, it := range items {
 		max = int(math.Max(float64(max), float64(it.Count)))
@@ -162,12 +163,14 @@ type column struct {
 }
 
 type columnChart struct {
-	Title   string
-	Columns []column
+	Title    string
+	Subtitle string
+	Unit     string
+	Columns  []column
 }
 
 func newColumnChart(title string, items []stats.RangeItem) columnChart {
-	c := columnChart{Title: title}
+	c := columnChart{Title: title, Subtitle: "Visitor-days in each bucket", Unit: "visitor-days"}
 	max := 0
 	for _, it := range items {
 		max = int(math.Max(float64(max), float64(it.Count)))

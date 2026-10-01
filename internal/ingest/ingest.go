@@ -12,6 +12,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"regexp"
@@ -19,6 +20,7 @@ import (
 	"time"
 
 	"github.com/lnd3/wisp/hook"
+	"github.com/lnd3/wisp/internal/events"
 	"github.com/lnd3/wisp/internal/registry"
 	"github.com/lnd3/wisp/internal/staging"
 )
@@ -61,6 +63,10 @@ type Handler struct {
 	Stager   Stager
 	Now      func() time.Time // default time.Now
 	Log      *log.Logger      // internal failures only; default discards
+	// Events, if set, receives rejections and failures for the
+	// dashboard's issue list, and accepted batches for its ingest
+	// status. Messages are fixed strings; never request content.
+	Events *events.Log
 }
 
 // Routes returns the API's mux: POST /v1/ingest and GET /healthz.
@@ -89,6 +95,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		product, ok = h.Registry().Lookup(token)
 	}
 	if !ok {
+		h.Events.Record(events.Warning, "ingest", "", "rejected: missing or unknown token (401)")
 		writeJSON(w, http.StatusUnauthorized, response{Error: "unauthorized"})
 		return
 	}
@@ -100,19 +107,25 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if err := dec.Decode(&b); err != nil {
 		var tooBig *http.MaxBytesError
 		if errors.As(err, &tooBig) {
+			h.Events.Record(events.Warning, "ingest", product, "rejected: body too large (413)")
 			writeJSON(w, http.StatusRequestEntityTooLarge, response{Error: "body too large"})
 			return
 		}
+		h.Events.Record(events.Warning, "ingest", product, "rejected: invalid JSON (400)")
 		writeJSON(w, http.StatusBadRequest, response{Error: "invalid JSON"})
 		return
 	}
 	if dec.More() {
+		h.Events.Record(events.Warning, "ingest", product, "rejected: invalid JSON (400)")
 		writeJSON(w, http.StatusBadRequest, response{Error: "invalid JSON"})
 		return
 	}
 	// Same uniform 401 as a bad token: a valid token for one product
 	// can't be used to probe or write another product's key.
 	if b.Product != product {
+		// Logged under the token's real product: its operator needs to
+		// know their token is being sent with another product's key.
+		h.Events.Record(events.Warning, "ingest", product, "rejected: token used with another product key (401)")
 		writeJSON(w, http.StatusUnauthorized, response{Error: "unauthorized"})
 		return
 	}
@@ -122,12 +135,15 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		now = h.Now
 	}
 	if status, msg := validate(&b, now().UTC()); status != 0 {
+		// msg is one of validate's fixed strings, never request content.
+		h.Events.Record(events.Warning, "ingest", product, fmt.Sprintf("rejected: %s (%d)", msg, status))
 		writeJSON(w, status, response{Error: msg})
 		return
 	}
 
 	dup, err := h.Stager.Merge(r.Context(), product, &b)
 	if errors.Is(err, staging.ErrClosed) {
+		h.Events.Record(events.Warning, "ingest", product, "rejected: day closed (409)")
 		// Validated just before the deadline, but the close sealed the day
 		// first. Same answer as any closed day: the hook drops the batch.
 		writeJSON(w, http.StatusConflict, response{Error: "day closed"})
@@ -139,9 +155,11 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			// from request content.
 			h.Log.Printf("ingest: merge failed for product %s: %v", product, err)
 		}
+		h.Events.Record(events.Error, "ingest", product, "staging merge failed (500): see wisp's log")
 		writeJSON(w, http.StatusInternalServerError, response{Error: "internal error"})
 		return
 	}
+	h.Events.Delivered(product)
 	if dup {
 		writeJSON(w, http.StatusOK, response{Status: "duplicate"})
 		return

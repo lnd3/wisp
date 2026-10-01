@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/lnd3/wisp/hook"
+	"github.com/lnd3/wisp/internal/events"
 	"github.com/lnd3/wisp/internal/staging"
 	"github.com/lnd3/wisp/internal/stats"
 )
@@ -233,6 +234,8 @@ func TestFailingCloseRetriesThenDiscards(t *testing.T) {
 	f := newFixture(t)
 	f.merge(t, "cindernote", "2026-10-01", "a", hook.Visitor{K: keyA, Visits: 1, Views: map[string]int{"/": 1}, Agent: firefox})
 	f.stats.Close() // every WriteDay now fails
+	ev := events.New(nil)
+	f.closer.Events = ev
 
 	if r := f.closer.Run(context.Background(), at("2026-10-02T02:30:00Z")); r.Retrying != 1 {
 		t.Fatalf("within MaxDelay: %+v", r)
@@ -248,6 +251,13 @@ func TestFailingCloseRetriesThenDiscards(t *testing.T) {
 	}
 	if !strings.Contains(f.logs.String(), "UNAGGREGATED") {
 		t.Error("discarding a day must be logged loudly")
+	}
+	var levels []string
+	for _, e := range ev.Entries() {
+		levels = append(levels, e.Level+": "+e.Message)
+	}
+	if len(levels) != 2 || !strings.Contains(strings.Join(levels, "\n"), "UNAGGREGATED") {
+		t.Errorf("issue log = %v, want a retry error and an UNAGGREGATED error", levels)
 	}
 	if strings.Contains(f.logs.String(), keyA) {
 		t.Error("logs must never contain a visitor key")

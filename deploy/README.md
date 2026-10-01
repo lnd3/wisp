@@ -26,9 +26,17 @@ it:
 
 If a close keeps failing, the file is deleted unaggregated after 1h,
 and the log line says `UNAGGREGATED`. Keys never outlive their day by
-more than that. The dashboard at `https://wisp.mera.network/dashboard/` reads
-these rows. It is read-only, has no cookies and makes no third-party
-requests.
+more than that. The dashboard at `https://wisp.mera.network/dashboard/` is read-only,
+has no cookies and makes no third-party requests. It has three tabs:
+- **History:** closed days from the stats DB, over 7/30/90 days.
+- **Today so far:** today's open staging, aggregated on the fly with
+  the same keyless summarize the close uses. It also has an **ingest
+  status** table: each registered product's last accepted batch.
+- **Issues:** rejected batches (unknown or wrong-product token,
+  invalid, late, too large), failed or UNAGGREGATED day closes,
+  registry reload failures, and wisp's own self-report problems.
+  Deduplicated with counts; in memory only, so it resets on restart.
+  Every tab shows a banner when there were errors in the last 24h.
 
 **Who calls this endpoint:** the products' own backends,
 server-to-server, sending unique events or (preferably) pre-aggregated

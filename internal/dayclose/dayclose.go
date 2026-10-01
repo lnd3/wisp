@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/lnd3/wisp/hook"
+	"github.com/lnd3/wisp/internal/events"
 	"github.com/lnd3/wisp/internal/staging"
 	"github.com/lnd3/wisp/internal/stats"
 )
@@ -25,6 +26,7 @@ type Closer struct {
 	Stats    *stats.DB
 	Log      *log.Logger   // required; product/day and errors only
 	MaxDelay time.Duration // default DefaultMaxDelay
+	Events   *events.Log   // optional: failures for the dashboard's issue list
 }
 
 // Result counts one Run's outcomes.
@@ -66,12 +68,15 @@ func (c *Closer) Run(ctx context.Context, now time.Time) Result {
 		if err != nil {
 			if now.Before(deadline.Add(maxDelay)) {
 				c.Log.Printf("dayclose: %s/%s failed, will retry: %v", d.Product, d.Date, err)
+				c.Events.Record(events.Error, "dayclose", d.Product, "close of "+d.Date+" failed, retrying (see wisp's log)")
 				res.Retrying++
 				continue
 			}
 			c.Log.Printf("dayclose: %s/%s failed past the %s limit — deleting staging UNAGGREGATED: %v", d.Product, d.Date, maxDelay, err)
+			c.Events.Record(events.Error, "dayclose", d.Product, d.Date+" deleted UNAGGREGATED after repeated close failures: that day's stats are lost")
 			if err := c.Staging.Delete(d); err != nil {
 				c.Log.Printf("dayclose: delete %s/%s: %v", d.Product, d.Date, err)
+				c.Events.Record(events.Error, "dayclose", d.Product, "could not delete staging for "+d.Date+": keyed data outlives its day (see wisp's log)")
 				continue
 			}
 			res.Discarded++
@@ -82,6 +87,7 @@ func (c *Closer) Run(ctx context.Context, now time.Time) Result {
 			// Stats are committed; the next Run re-summarizes the same file
 			// and rewrites the same rows, then retries the delete.
 			c.Log.Printf("dayclose: delete %s/%s: %v", d.Product, d.Date, err)
+			c.Events.Record(events.Error, "dayclose", d.Product, "could not delete staging for "+d.Date+" after close, retrying (see wisp's log)")
 			res.Retrying++
 			continue
 		}
