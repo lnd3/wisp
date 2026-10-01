@@ -36,9 +36,10 @@ See `hook/doc.go` and `plan/designs/D002-*.md`.
 
 ## Status
 
-Early. Implemented: the in-product `hook`, the ingest API, the day
-close, and the product statistics DB. Not built yet: the dashboard.
-Not deployed yet. See
+Early. All MVP pieces are implemented and tested: the in-product
+`hook`, the ingest API, the day close, the product statistics DB and
+the operator dashboard (`/dashboard/`). Not deployed yet, and no
+product is wired in yet. See
 `plan/projects/P001-*.md` for current scope and tasks.
 
 ## Validate the plan before committing

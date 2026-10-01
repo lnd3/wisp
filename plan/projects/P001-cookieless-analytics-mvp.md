@@ -103,8 +103,10 @@ full technical design.
 ### Phase 3 — Storage, rollups, dashboard
 - [x] Day close + product statistics DB (D002 §4–5): `internal/stats`,
       `internal/dayclose`, `staging.Summarize`/`Seal`
-- [ ] Events schema + rollup jobs
-- [ ] Dashboard UI
+- [x] ~~Events schema + rollup jobs~~ superseded by D002's staging →
+      day close → daily stats tables (no raw event store exists)
+- [x] Dashboard UI (`internal/dashboard`, `/dashboard/` behind Caddy
+      basic_auth)
 
 ## Log
 
@@ -155,3 +157,10 @@ hash; wisp aggregates at day close and then deletes every key. Two
 decisions remain open because they touch this repo's own invariants:
 which extra browser fields go into the key, and whether the salt is
 per-product or shared.
+
+2026-09-30 (later still) — MVP feature-complete in code: hook →
+ingest API → staging → day close → stats DB → dashboard, all tested.
+Remaining before it's live: DNS (the EphemNet zone entry), first
+deploy, and wiring the hook into a first product. Details in [[D001]]
+(dashboard) and [[D002]] (data path).
+

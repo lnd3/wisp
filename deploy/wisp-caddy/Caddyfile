@@ -57,6 +57,16 @@
 	handle /v1/* {
 		reverse_proxy wisp:8080
 	}
+	# The operator dashboard (internal/dashboard), behind HTTP Basic
+	# Auth, the same way EphemNet gates status.mera.network. The password
+	# never touches wisp's code, only this file and deploy/.env (as a
+	# bcrypt hash). No cookie is involved: the browser resends the header.
+	handle /dashboard* {
+		basic_auth {
+			{$WISP_DASHBOARD_USER} {$WISP_DASHBOARD_HASH}
+		}
+		reverse_proxy wisp:8080
+	}
 	handle {
 		root * /srv/site
 		file_server

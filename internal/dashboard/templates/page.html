@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>wisp · {{.ProductLabel}}</title>
+<link rel="stylesheet" href="/dashboard/static/dashboard.css">
+<script src="/dashboard/static/dashboard.js" defer></script>
+</head>
+<body>
+<header class="top">
+  <h1>wisp</h1>
+  <nav class="filters" aria-label="Filters">
+    <div class="seg" role="group" aria-label="Product">
+      {{range .Products}}<a href="{{.URL}}"{{if .Selected}} aria-current="page"{{end}}>{{.Label}}</a>{{end}}
+    </div>
+    <div class="seg" role="group" aria-label="Date range">
+      {{range .Ranges}}<a href="{{.URL}}"{{if .Selected}} aria-current="page"{{end}}>{{.Label}}</a>{{end}}
+    </div>
+  </nav>
+</header>
+
+<main>
+{{if not .HasData}}
+  <section class="empty">
+    <h2>No closed days yet</h2>
+    <p>A day's statistics appear once it closes, 26 hours after it starts (the day plus a 2-hour grace for late batches). Until a product's hook has reported a full day, there is nothing to show.</p>
+  </section>
+{{else}}
+  <p class="scope">{{.ProductLabel}} · {{.From}} to {{.To}} (UTC, closed days only). Visitors are a deliberate lower bound. Figures summed over several days are <strong>visitor-days</strong>, not unique people: the same person on two days counts twice, by design.</p>
+
+  <section class="tiles" aria-label="Summary">
+    {{range .Tiles}}
+    <div class="tile">
+      <div class="tile-label">{{.Label}}</div>
+      <div class="tile-value">{{.Value}}</div>
+      {{if .Note}}<div class="tile-note">{{.Note}}</div>{{end}}
+    </div>
+    {{end}}
+  </section>
+
+  {{template "line" .Visitors}}
+  {{template "line" .Views}}
+
+  <details class="table-view">
+    <summary>Daily table</summary>
+    <table>
+      <thead><tr><th scope="col">Day</th><th scope="col">Visitors</th><th scope="col">Visits</th><th scope="col">Views</th><th scope="col">Downloads</th><th scope="col">Single-view</th></tr></thead>
+      <tbody>
+      {{range .Daily}}<tr><th scope="row">{{.Date}}</th><td>{{.Uniques}}</td><td>{{.Visits}}</td><td>{{.Views}}</td><td>{{.Downloads}}</td><td>{{.Bounces}}</td></tr>
+      {{end}}
+      </tbody>
+    </table>
+  </details>
+
+  <div class="grid">
+    {{template "bars" .TopPages}}
+    {{template "bars" .Referrers}}
+    {{template "bars" .Downloads}}
+  </div>
+  <div class="grid three">
+    {{template "bars" .Browsers}}
+    {{template "bars" .OSes}}
+    {{template "bars" .Devices}}
+  </div>
+  <div class="grid three">
+    {{template "columns" .PagesHist}}
+    {{template "columns" .ViewsHist}}
+    {{template "columns" .VisitsHist}}
+  </div>
+{{end}}
+</main>
+<div id="tip" class="tip" role="status" hidden><strong class="tip-value"></strong><span class="tip-label"></span></div>
+</body>
+</html>
+
+{{define "line"}}
+<section class="card">
+  <h2>{{.Title}}</h2>
+  {{if .Subtitle}}<p class="sub">{{.Subtitle}}</p>{{end}}
+  <div class="line-chart">
+    <div class="yaxis" aria-hidden="true">
+      {{range .YTicks}}<span style="top: {{pct .Pos}}%">{{.Label}}</span>{{end}}
+    </div>
+    <div class="plot">
+      <svg viewBox="0 0 1000 100" preserveAspectRatio="none" aria-hidden="true">
+        {{range .YTicks}}<line class="grid-line" x1="0" x2="1000" y1="{{pct .Pos}}" y2="{{pct .Pos}}"></line>{{end}}
+        <path class="area" d="{{.Area}}"></path>
+        <path class="line" d="{{.Line}}"></path>
+      </svg>
+      <span class="end-label" style="top: {{pct .End.Y}}%">{{.End.Value}}</span>
+      <span class="end-dot" style="left: {{pct .End.X}}%; top: {{pct .End.Y}}%"></span>
+      <span class="crosshair" hidden></span>
+      <span class="hover-dot" hidden></span>
+      {{range .Points}}<span class="hit" data-x="{{pct .X}}" data-y="{{pct .Y}}" data-value="{{.Value}}" data-label="{{.Date}}" style="left: {{pct .HitLeft}}%; width: {{pct .HitWidth}}%"></span>{{end}}
+    </div>
+    <div class="xaxis" aria-hidden="true">
+      {{range .XTicks}}<span style="left: {{pct .Pos}}%">{{.Label}}</span>{{end}}
+    </div>
+  </div>
+</section>
+{{end}}
+
+{{define "bars"}}
+<section class="card">
+  <h2>{{.Title}}</h2>
+  <p class="sub">{{.Subtitle}}</p>
+  {{if .Rows}}
+  <ol class="bars">
+    {{$show := .ShowVisitorDays}}{{$unit := .CountLabel}}
+    {{range .Rows}}
+    <li tabindex="0" data-value="{{.Count}} {{$unit}}" data-label="{{if $show}}{{.VisitorDays}} visitor-days · {{end}}{{.Label}}">
+      <span class="bar-label" title="{{.Label}}">{{.Short}}</span>
+      <span class="bar-track"><span class="bar-fill" style="width: {{pct .Pct}}%"></span><span class="bar-value">{{.Count}}</span></span>
+    </li>
+    {{end}}
+  </ol>
+  {{else}}<p class="none">Nothing in this range.</p>{{end}}
+</section>
+{{end}}
+
+{{define "columns"}}
+<section class="card">
+  <h2>{{.Title}}</h2>
+  <p class="sub">Visitor-days in each bucket</p>
+  {{if .Columns}}
+  <div class="columns">
+    {{range .Columns}}
+    <div class="col" tabindex="0" data-value="{{.Value}} visitor-days" data-label="{{.Label}}">
+      <span class="col-value">{{.Value}}</span>
+      <span class="col-bar" style="height: {{pct .Pct}}%"></span>
+      <span class="col-label">{{.Label}}</span>
+    </div>
+    {{end}}
+  </div>
+  {{else}}<p class="none">Nothing in this range.</p>{{end}}
+</section>
+{{end}}

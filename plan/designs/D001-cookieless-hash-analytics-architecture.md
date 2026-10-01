@@ -326,6 +326,34 @@ verified with jsdom rather than assumed correct from reading the code.
 
 ## Log
 
+2026-09-30 (later) — **Dashboard implemented** (`internal/dashboard`,
+served by `wisp serve` at `/dashboard/`). It covers this design's
+list: time series, top pages, top referrers, browser/OS/device, and
+downloads. It adds the D002 histograms and a KPI row. Choices:
+- **Server-rendered and self-contained:** HTML + inline SVG, with
+  embedded CSS/JS served from the same origin. Strict CSP
+  (`default-src 'none'`). No cookies, no storage; selection lives in
+  the URL. A test fails on any third-party URL in page, CSS or JS.
+- **Access:** Caddy `basic_auth` on `/dashboard*`, following EphemNet's
+  `status.mera.network` precedent. Compose refuses to start without
+  the credentials.
+- **Honest wording, enforced by a test:** per-day figures are
+  "visitors"; anything summed over days is "visitor-days". The phrase
+  "unique visitors" never appears (mutation-checked).
+- **Charts follow the dataviz method:**
+  - One validated series hue (blue #2a78d6 / #3987e5 dark, passing all
+    checks on both surfaces).
+  - No dual axis: visitors and views are two charts.
+  - Thin marks, a crosshair tooltip on lines, per-bar tooltips, a
+    daily table view, and dark mode.
+  - Rendered in headless Chromium and inspected (light, dark, 390px
+    mobile). That caught four real layout bugs, all fixed: the
+    title/tick overlap, a `hidden` tooltip still visible, x-label
+    collisions on narrow screens, and slivers for zero values.
+  - Hover was verified by driving Chromium over CDP.
+- **"All products"** sums across products. Each product has its own
+  salt, so that's visitor-days too, and it's labelled as such.
+
 2026-09-30 (later still) — Ingest batch shape decided by the user:
 per-visitor daily distributions keyed by a product-side hash (IP, UA,
 other browser fields), with pages visited, total visits and page-visit

@@ -16,3 +16,4 @@ Format: `YYYY-MM-DD | ID | old_status → new_status | note`
 2026-09-30 | D002 | PLANNING → PLANNING | hook package (§1b) implemented in hook/ — tested, not yet adopted by a product; ingest API still to build
 2026-09-30 | D002 | PLANNING → PLANNING | Ingest API implemented (cmd/wisp, internal/{ingest,registry,staging}) and wired into deploy/; interim sweep discards unaggregated days until the day close (§4–5) exists
 2026-09-30 | D002 | PLANNING → PLANNING | Day close + stats DB implemented (internal/stats, internal/dayclose); stats engine resolved: SQLite. Interim unaggregated sweep removed
+2026-09-30 | P001 | PLANNING → PLANNING | Dashboard implemented; MVP complete in code (hook → ingest → staging → day close → stats → dashboard). Remaining: DNS, deploy, first product integration

@@ -11,8 +11,10 @@ Two containers:
 - **`wisp`**: the server (`cmd/wisp`). It runs the ingest API that
   product hooks POST to, plus the day close. It sits on an
   internal-only network with no host port.
-- **`wisp-caddy`**: terminates TLS, reverse-proxies `/v1/*` to `wisp`,
-  and serves the static page (`site/index.html`) for everything else.
+- **`wisp-caddy`**: terminates TLS and reverse-proxies to `wisp`:
+  `/v1/*` for the ingest API, and `/dashboard/*` (behind HTTP Basic
+  Auth) for the operator dashboard. Everything else is the static page
+  (`site/index.html`).
 
 **Day close:** every 10 minutes, and at startup, wisp closes each
 product-day that is past its deadline (day start + 26h). For each one
@@ -23,8 +25,9 @@ it:
 
 If a close keeps failing, the file is deleted unaggregated after 1h,
 and the log line says `UNAGGREGATED`. Keys never outlive their day by
-more than that. The dashboard isn't built yet; until it is, read the
-stats DB with `sqlite3` (see "Verifying it works").
+more than that. The dashboard at `https://wisp.mera.network/dashboard/` reads
+these rows. It is read-only, has no cookies and makes no third-party
+requests.
 
 **Who calls this endpoint:** the products' own backends,
 server-to-server, sending unique events or (preferably) pre-aggregated
@@ -42,8 +45,8 @@ Internet ──▶ nginx (host, shared by every product on bh2) ─────�
                 │
                 ▼
           ┌─────┴──────────────┐
-          ▼ /v1/*              ▼ everything else
-       wisp :8080           site/ (static, read-only mount)
+          ▼ /v1/*, /dashboard/* (basic auth)      ▼ everything else
+       wisp :8080                             site/ (static, read-only mount)
        (wisp-internal network, internal: true; no host port)
           │
           ▼
@@ -91,7 +94,9 @@ cinder's setup.
 2. Confirm the SSH user is in the `docker` group.
 3. On the server:
    `mkdir -p /opt/wisp/live/deploy` and create `.env` there by hand
-   with `WISP_DOMAIN=wisp.mera.network` (see `deploy/.env.example`).
+   with `WISP_DOMAIN=wisp.mera.network` and the dashboard's
+   `WISP_DASHBOARD_USER`/`WISP_DASHBOARD_HASH` (see
+   `deploy/.env.example`; the hash's `$` must be doubled).
    It lives only on the server and survives every deploy (`rsync
    --exclude`).
 4. **DNS: this is not a registrar step.** `mera.network` is
@@ -194,10 +199,10 @@ deploy/ops.sh bh2 /opt/wisp live down
   `{"status":"ok"}` (see `internal/ingest` for the shape).
 - After a day closes (the next day at 02:00 UTC at the latest, plus up
   to 10 min), `deploy/ops.sh bh2 /opt/wisp live logs wisp` shows
-  `dayclose: closed <product>/<day>`. The day's row is then in the
-  stats DB. The container has no shell, so copy the DB out to read it:
-  `docker cp wisp-live-wisp-1:/data/stats.sqlite /tmp/ && sqlite3
-  /tmp/stats.sqlite 'SELECT * FROM daily_totals'`.
+  `dayclose: closed <product>/<day>`, and the day appears on the
+  dashboard.
+- `curl -sI https://wisp.mera.network/dashboard/` returns `401` without
+  credentials. With them (`-u user:password`), it returns `200`.
 - **Privacy check:** after a few requests, confirm
   `sudo grep -c '<your-own-ip>' /var/log/nginx/access.log` doesn't grow
   from wisp traffic. Also confirm

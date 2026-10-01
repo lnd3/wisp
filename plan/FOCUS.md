@@ -11,10 +11,10 @@
   `deploy/`, adapted from persona/EphemNet/cinder, with ports and
   subnet checked live on `bh2`. It serves a placeholder page until an
   ingest API exists.
-- **The whole ingest path is implemented** (D002 §1b–§5): the hook,
-  the ingest API, staging, the day close and the stats DB, plus the
-  `wisp` service in `deploy/`. Not yet deployed (DNS). No product is
-  wired in yet. The dashboard isn't built.
+- **The MVP is implemented in code**: the hook, ingest API, staging,
+  day close, stats DB and dashboard, plus the `wisp` service and
+  dashboard basic auth in `deploy/`. Not deployed yet (DNS). No
+  product is wired in yet.
 - **D001's revision to backend-only ingest.** Products' servers send
   unique events or (preferably) aggregates. No browser ever talks to
   wisp.
@@ -37,11 +37,10 @@
 ## Next
 
 1. Get the `wisp.mera.network` zone entry (EphemNet side). Then:
-   configure-nginx, create `products.json`, deploy, and run the
-   privacy log check plus the post-deploy ingest check.
+   configure-nginx, create `.env` (including the dashboard credentials)
+   and `products.json`, deploy, and run the README's verification list
+   (privacy log check, ingest 401, dashboard 401/200).
 2. Wire the hook into a first product (persona is the smallest).
-   Confirm a real day closes into `stats.sqlite`.
-3. Dashboard (P001 Phase 3): read-only over the stats DB. Label
-   multi-day uniques as visitor-days, never "unique visitors".
-4. Settle D002's open questions: key fields beyond IP+UA, salt scope,
+   Confirm a real day closes and shows on the dashboard.
+3. Settle D002's open questions: key fields beyond IP+UA, salt scope,
    restart behaviour, and the proposed values.

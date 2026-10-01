@@ -1,6 +1,6 @@
 // Command wisp runs wisp's server: the ingest API product hooks send to,
-// and the day close that turns each product-day's keyed staging into
-// keyless rows in the product statistics DB.
+// the day close that turns each product-day's keyed staging into keyless
+// rows in the product statistics DB, and the read-only dashboard over it.
 //
 //	wisp serve [-addr :8080] [-data /data] [-registry /etc/wisp/products.json]
 //	wisp hash-token   < token   # prints the SHA-256 to put in the registry
@@ -25,6 +25,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/lnd3/wisp/internal/dashboard"
 	"github.com/lnd3/wisp/internal/dayclose"
 	"github.com/lnd3/wisp/internal/ingest"
 	"github.com/lnd3/wisp/internal/registry"
@@ -103,9 +104,13 @@ func serve(args []string) error {
 		Stager:   store,
 		Log:      logger,
 	}
+	mux := h.Routes()
+	// Read-only dashboard over the stats DB. Access control is Caddy's
+	// basic_auth in front of /dashboard/; only Caddy can reach wisp.
+	(&dashboard.Handler{Stats: statsDB, Log: logger}).Register(mux)
 	srv := &http.Server{
 		Addr:              *addr,
-		Handler:           h.Routes(),
+		Handler:           mux,
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       60 * time.Second,
 		WriteTimeout:      60 * time.Second,

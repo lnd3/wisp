@@ -34,6 +34,11 @@ services:
     environment:
       - WISP_DOMAIN=${WISP_DOMAIN:?set WISP_DOMAIN in deploy/.env}
       - WISP_EDGE_SUBNET=${WISP_EDGE_SUBNET:-172.27.1.0/24}
+      # Dashboard Basic Auth — required, no default: Caddy must refuse to
+      # start rather than serve the dashboard unauthenticated. See
+      # deploy/.env.example for generating the hash (and its $$ escaping).
+      - WISP_DASHBOARD_USER=${WISP_DASHBOARD_USER:?set WISP_DASHBOARD_USER in deploy/.env}
+      - WISP_DASHBOARD_HASH=${WISP_DASHBOARD_HASH:?set WISP_DASHBOARD_HASH in deploy/.env — see deploy/.env.example}
     volumes:
       - ./wisp-caddy/Caddyfile:/etc/caddy/Caddyfile:ro
       - ../site:/srv/site:ro
