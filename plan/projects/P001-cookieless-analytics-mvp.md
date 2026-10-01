@@ -447,3 +447,19 @@ exactly what this item requires:
   `ephemnet-site`, which may unblock EphemNet A006 (wisp analytics) if
   it's a Go handler.
 
+2026-10-01 (later) — **uptime-wisp status page gets Basic Auth** (user
+request). It's required whenever the page is served, so the service
+refuses to start without it.
+- **Config:** stores only a SHA-256 of a long random password
+  (`-hash-password`; bcrypt isn't in Go's standard library). Both
+  user and hash are compared in constant time.
+- **`/healthz`** stays open for Docker.
+- **New `-check-config`:** validates exactly as the service runs, and
+  `deploy.sh`'s pre-flight now uses it. The old `-once` pre-flight
+  would have approved an auth-less config and left the container in an
+  exit-2 restart loop. Caught before shipping.
+- **On rbserver1,** `auth` was merged into the existing config: backup
+  taken, every key kept. The password is in
+  `/opt/uptime-wisp/.status-password` (0600).
+- **Caveat:** Basic Auth over plain HTTP is LAN-grade.
+

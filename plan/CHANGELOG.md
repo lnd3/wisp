@@ -36,3 +36,4 @@ Format: `YYYY-MM-DD | ID | old_status → new_status | note`
 2026-10-01 | P001 | IN_PROGRESS → IN_PROGRESS | uptime-kuma removed (867MB); decision reversed by user: build own lightweight prober (Go stdlib, alpine)
 2026-10-01 | P001 | IN_PROGRESS → IN_PROGRESS | uptime-wisp built (Go stdlib, 16.8MB alpine image) + deploy/uptime; found EphemNet ns1/ns2.mera.network NXDOMAIN bug
 2026-10-01 | P001 | IN_PROGRESS → IN_PROGRESS | uptime-wisp deployed on rbserver1:/opt/uptime-wisp; 14 checks up; ntfy test alert confirmed; EphemNet fixed the ns1 NXDOMAIN finding
+2026-10-01 | P001 | IN_PROGRESS → IN_PROGRESS | uptime-wisp status page behind required Basic Auth (sha256 password); -check-config pre-flight

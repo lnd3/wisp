@@ -341,3 +341,68 @@ func TestStatusAndHealth(t *testing.T) {
 		t.Errorf("healthz when stalled = %d", st)
 	}
 }
+
+// ---- auth ----
+
+func TestHashPassword(t *testing.T) {
+	// SHA-256("password") — a published test vector.
+	if got := HashPassword("password"); got != "5e884898da28047151d0e56f8dc6292773603d0d6aabbdd62a11ef721d1542d8" {
+		t.Errorf("HashPassword = %s", got)
+	}
+}
+
+func TestAuthConfigValidation(t *testing.T) {
+	base := `"alerts":[{"type":"ntfy","url":"https://ntfy.sh/t"}],"checks":[{"name":"a","type":"http","url":"https://a/"}]`
+	for name, auth := range map[string]string{
+		"no user":      `{"password_sha256":"` + HashPassword("x") + `"}`,
+		"short hash":   `{"user":"u","password_sha256":"abcd"}`,
+		"plaintext pw": `{"user":"u","password_sha256":"hunter2hunter2"}`,
+	} {
+		if _, err := Parse([]byte(`{"auth":` + auth + `,` + base + `}`)); err == nil {
+			t.Errorf("%s: accepted", name)
+		}
+	}
+	if _, err := Parse([]byte(`{"auth":{"user":"u","password_sha256":"` + HashPassword("correct horse battery") + `"},` + base + `}`)); err != nil {
+		t.Errorf("valid auth rejected: %v", err)
+	}
+}
+
+func TestStatusPageRequiresAuth(t *testing.T) {
+	m, _, _ := scripted(t, ok)
+	m.cfg.Auth = &Auth{User: "wisp", PasswordSHA256: HashPassword("correct horse battery")}
+	m.Round(context.Background())
+	srv := httptest.NewServer(m.Handler())
+	defer srv.Close()
+	get := func(path, user, pass string) *http.Response {
+		req, _ := http.NewRequest("GET", srv.URL+path, nil)
+		if user != "" {
+			req.SetBasicAuth(user, pass)
+		}
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		return resp
+	}
+	for _, tc := range []struct {
+		name, user, pass string
+		want             int
+	}{
+		{"no credentials", "", "", 401},
+		{"wrong password", "wisp", "nope", 401},
+		{"wrong user", "admin", "correct horse battery", 401},
+		{"right credentials", "wisp", "correct horse battery", 200},
+	} {
+		resp := get("/", tc.user, tc.pass)
+		if resp.StatusCode != tc.want {
+			t.Errorf("%s: %d, want %d", tc.name, resp.StatusCode, tc.want)
+		}
+		if tc.want == 401 && !strings.Contains(resp.Header.Get("WWW-Authenticate"), `Basic realm="uptime-wisp"`) {
+			t.Errorf("%s: missing WWW-Authenticate", tc.name)
+		}
+	}
+	if resp := get("/healthz", "", ""); resp.StatusCode != 200 {
+		t.Errorf("/healthz must stay open for Docker's health check: %d", resp.StatusCode)
+	}
+}

@@ -27,8 +27,10 @@ Every interval (default 60s), from outside the machines it watches:
   dead-man's switch such as healthchecks.io. It alerts if the pings
   stop, which covers this host dying, including offgrid's blind spot on
   rbserver1.
-- **A status page** on `:8080` (refreshes every 30s) and `/healthz`,
-  which Docker uses as the container health check.
+- **A status page** on `:8080` (refreshes every 30s) behind **HTTP
+  Basic Auth**, which is required: the service refuses to start the page
+  without it. `/healthz` stays open; it only says "ok", and Docker uses
+  it as the container health check.
 
 ## Deploy / update
 
@@ -45,8 +47,9 @@ deploy/uptime/deploy.sh rbserver1 /opt/uptime-wisp --port=8090
    host from the shipped `config.example.json`. That file holds the
    alert secret, such as the ntfy topic, so it's never synced or
    committed.
-2. **Every run:** it validates the host's config with the new binary
-   *before* replacing the running one, so a config the new version
+2. **Every run:** it validates the host's config with the new binary,
+   exactly as the service will run it (`-check-config`), *before*
+   replacing the running one, so a config the new version
    rejects can't take monitoring down. It then rebuilds the tiny image
    and restarts.
 3. **Port and bind** are remembered on the host. A port that something
@@ -57,6 +60,22 @@ deploy/uptime/deploy.sh rbserver1 /opt/uptime-wisp --port=8090
 ```bash
 ssh rbserver1 'cd /opt/uptime-wisp && docker compose -p uptime-wisp exec uptime-wisp uptime-wisp -config /etc/uptime-wisp/config.json -test-alert'
 ```
+
+**Status page login:** `config.json`'s `auth` holds the user and the
+*SHA-256* of a long random password, never the password itself. On
+rbserver1 the password is in `/opt/uptime-wisp/.status-password`
+(0600). To set a new one:
+
+```bash
+PW=$(openssl rand -base64 24)
+printf %s "$PW" | sha256sum | cut -d' ' -f1   # → auth.password_sha256 (no trailing newline!)
+```
+
+(Or use `uptime-wisp -hash-password`, which reads the password from
+stdin and handles the newline.) Edit `config.json` **in place**, never
+by rewriting it from scratch, then re-run `deploy.sh`. Basic Auth over
+plain HTTP is fine on a home LAN, but the password crosses the network
+unencrypted, so don't expose this port to the internet.
 
 **Dry run a config** without alerting (exit 1 if any check fails,
 exit 2 if the config is invalid):
@@ -75,6 +94,7 @@ URL. Fields:
 | `cert_warn_days` | `14` | warn when a certificate expires sooner |
 | `resolver` | `1.1.1.1:53` | DNS server for HTTP checks' own lookups |
 | `heartbeat.url` | — | optional dead-man's-switch ping |
+| `auth` | required with the status page | `{"user":…, "password_sha256":…}` |
 | `alerts[]` | required | `{"type":"ntfy"\|"webhook","url":…,"token":…}` |
 | `checks[]` | required | `http`: `url`, `expect_status`; `dns`: `host`, `server`, `record_type` (A/AAAA), `expect` |
 

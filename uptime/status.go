@@ -1,6 +1,9 @@
 package uptime
 
 import (
+	"crypto/sha256"
+	"crypto/subtle"
+	"encoding/hex"
 	"html/template"
 	"net/http"
 	"time"
@@ -43,12 +46,14 @@ th{color:var(--muted);font-weight:500;border-top:0}td.n{font-variant-numeric:tab
 {{range .States}}<tr><td class="s {{.Status}}">{{.Status}}</td><td>{{.Name}}<div class="t">{{.Target}}</div></td><td>{{.Detail}}</td><td class="n">{{ms .Latency}}</td><td class="n">{{ago .Since}}</td><td class="n">{{days .CertExpiry}}</td></tr>
 {{end}}</tbody></table></main></body></html>`))
 
-// Handler serves the status page at / and a health check at /healthz:
-// 200 while rounds are completing, 503 once none has finished for three
-// intervals (or before the first).
+// Handler serves the status page at / (behind Basic Auth when
+// cfg.Auth is set) and a health check at /healthz (always open: it says
+// only "ok", and Docker's health check calls it): 200 while rounds are
+// completing, 503 once none has finished for three intervals (or before
+// the first).
 func (m *Monitor) Handler() http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET /{$}", m.requireAuth(func(w http.ResponseWriter, r *http.Request) {
 		states, last := m.Snapshot()
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'")
@@ -57,7 +62,7 @@ func (m *Monitor) Handler() http.Handler {
 			Last     time.Time
 			Interval time.Duration
 		}{states, last, m.cfg.Interval.Duration})
-	})
+	}))
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		_, last := m.Snapshot()
 		if last.IsZero() || m.now().Sub(last) > 3*m.cfg.Interval.Duration {
@@ -67,4 +72,28 @@ func (m *Monitor) Handler() http.Handler {
 		w.Write([]byte("ok\n"))
 	})
 	return mux
+}
+
+// requireAuth wraps h in HTTP Basic Auth when cfg.Auth is set. Both the
+// user and the password hash are compared in constant time.
+func (m *Monitor) requireAuth(h http.HandlerFunc) http.HandlerFunc {
+	a := m.cfg.Auth
+	if a == nil {
+		return h
+	}
+	wantUser := sha256.Sum256([]byte(a.User))
+	wantPass, _ := hex.DecodeString(a.PasswordSHA256)
+	return func(w http.ResponseWriter, r *http.Request) {
+		user, pass, ok := r.BasicAuth()
+		gotUser := sha256.Sum256([]byte(user))
+		gotPass := sha256.Sum256([]byte(pass))
+		userOK := subtle.ConstantTimeCompare(gotUser[:], wantUser[:])
+		passOK := subtle.ConstantTimeCompare(gotPass[:], wantPass)
+		if !ok || userOK&passOK != 1 {
+			w.Header().Set("WWW-Authenticate", `Basic realm="uptime-wisp", charset="UTF-8"`)
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		h(w, r)
+	}
 }

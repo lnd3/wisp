@@ -5,6 +5,8 @@
   "cert_warn_days": 14,
   "resolver": "1.1.1.1:53",
 
+  "auth": { "user": "wisp", "password_sha256": "REPLACE: echo \"$PASSWORD\" | uptime-wisp -hash-password" },
+
   "alerts": [
     { "type": "ntfy", "url": "https://ntfy.sh/REPLACE-WITH-A-LONG-RANDOM-TOPIC" }
   ],

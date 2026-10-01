@@ -7,11 +7,14 @@
 //	uptime-wisp [-config /etc/uptime-wisp/config.json]   run
 //	uptime-wisp -once                                      one round, print results, no alerts (exit 1 if a check fails)
 //	uptime-wisp -test-alert                                send a test alert to every channel
+//	uptime-wisp -hash-password < password                 print auth.password_sha256
+//	uptime-wisp -check-config [-listen :8080]              validate as the service would run it
 //
 // Exit code 2 means the config is invalid.
 package main
 
 import (
+	"bufio"
 	"context"
 	"flag"
 	"fmt"
@@ -19,6 +22,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"text/tabwriter"
 	"time"
@@ -30,10 +34,15 @@ func main() {
 	cfgPath := flag.String("config", "/etc/uptime-wisp/config.json", "config file")
 	once := flag.Bool("once", false, "run one round, print the results, and exit (no alerts, no heartbeat)")
 	testAlert := flag.Bool("test-alert", false, "send a test alert through every channel and exit")
+	checkConfig := flag.Bool("check-config", false, "validate the config exactly as the service would run it (with -listen), then exit: 0 ok, 2 invalid")
+	hashPassword := flag.Bool("hash-password", false, "read a password on stdin, print its SHA-256 for auth.password_sha256, and exit")
 	listen := flag.String("listen", "", "status page + /healthz address; overrides the config's \"listen\" (the container sets :8080)")
 	flag.Parse()
 
 	logger := log.New(os.Stderr, "", log.LstdFlags|log.LUTC)
+	if *hashPassword {
+		os.Exit(printHash())
+	}
 	cfg, err := uptime.Load(*cfgPath)
 	if err != nil {
 		// Exit 2, not 1: -once uses 1 for "a check failed", and deploy.sh
@@ -43,6 +52,15 @@ func main() {
 	}
 	if *listen != "" {
 		cfg.Listen = *listen
+	}
+	// Never serve an open status page by accident.
+	if cfg.Listen != "" && cfg.Auth == nil && !*once && !*testAlert {
+		logger.Print("config: the status page is enabled but \"auth\" is missing — add {\"user\":…, \"password_sha256\":…} (see -hash-password)")
+		os.Exit(2)
+	}
+	if *checkConfig {
+		fmt.Printf("config ok: %d checks, %d alert channel(s), status page %s\n", len(cfg.Checks), len(cfg.Alerts), orOff(cfg.Listen))
+		return
 	}
 	m := uptime.New(cfg, uptime.Options{Log: logger})
 
@@ -92,4 +110,28 @@ func printOnce(ctx context.Context, m *uptime.Monitor) int {
 	}
 	tw.Flush()
 	return code
+}
+
+// printHash reads one line (the password) from stdin and prints its
+// SHA-256 for the config's auth.password_sha256.
+func printHash() int {
+	line, err := bufio.NewReader(os.Stdin).ReadString('\n')
+	pw := strings.TrimRight(line, "\r\n")
+	if err != nil && pw == "" {
+		fmt.Fprintln(os.Stderr, "hash-password: pipe the password on stdin")
+		return 2
+	}
+	if len(pw) < 16 {
+		fmt.Fprintln(os.Stderr, "hash-password: use at least 16 characters (e.g. openssl rand -base64 24)")
+		return 2
+	}
+	fmt.Println(uptime.HashPassword(pw))
+	return 0
+}
+
+func orOff(listen string) string {
+	if listen == "" {
+		return "off"
+	}
+	return "on " + listen + " (auth required)"
 }

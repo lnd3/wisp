@@ -118,10 +118,12 @@ CGO_ENABLED=0 GOOS=linux GOARCH=$GOARCH ${GOARM:+GOARM=$GOARM} \
 cp deploy/uptime/Dockerfile deploy/uptime/docker-compose.yml deploy/uptime/config.example.json "$STAGING/"
 
 echo "==> Validating the host's config.json with this build..."
-# Run the new binary against the host's real config before replacing the
-# running one: a config the new version rejects must not take monitoring down.
+# Check the host's real config with the new binary, exactly as the
+# container will run it (-listen :8080, so e.g. the auth requirement
+# applies), before replacing the running prober: a config the new
+# version rejects must not take monitoring down.
 scp -q "$STAGING/uptime-wisp" "$TARGET:$REMOTE_DIR/.uptime-wisp.check"
-if ! ssh "$TARGET" "cd '$REMOTE_DIR' && ./.uptime-wisp.check -config config.json -once >/dev/null 2>.check.err; rc=\$?; rm -f .uptime-wisp.check; [ \$rc -le 1 ] || { cat .check.err; rm -f .check.err; exit 1; }; rm -f .check.err"; then
+if ! ssh "$TARGET" "cd '$REMOTE_DIR' && ./.uptime-wisp.check -config config.json -listen :8080 -check-config; rc=\$?; rm -f .uptime-wisp.check; exit \$rc"; then
 	echo "ERROR: config.json on $TARGET is invalid for this version (above). Nothing was changed." >&2
 	exit 1
 fi

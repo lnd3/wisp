@@ -11,6 +11,8 @@ package uptime
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -56,6 +58,7 @@ type Config struct {
 	Resolver            string        `json:"resolver"`              // DNS server (host:port) for HTTP checks; default 1.1.1.1:53
 	Listen              string        `json:"listen"`                // status page + /healthz, e.g. ":8080"; "" disables
 	Heartbeat           *Heartbeat    `json:"heartbeat"`
+	Auth                *Auth         `json:"auth"` // required when the status page is served
 	Alerts              []AlertConfig `json:"alerts"`
 	Checks              []CheckConfig `json:"checks"`
 }
@@ -65,6 +68,14 @@ type Config struct {
 // alerts when the pings stop, i.e. when this prober or its host dies.
 type Heartbeat struct {
 	URL string `json:"url"`
+}
+
+// Auth protects the status page with HTTP Basic Auth. The password is
+// stored only as its hex SHA-256 (`uptime-wisp -hash-password`); with a
+// long random password a plain hash is enough — no slow KDF needed.
+type Auth struct {
+	User           string `json:"user"`
+	PasswordSHA256 string `json:"password_sha256"`
 }
 
 // AlertConfig is one notification channel.
@@ -152,6 +163,14 @@ func Parse(b []byte) (*Config, error) {
 	if c.Heartbeat != nil && !httpURL(c.Heartbeat.URL) {
 		errs = append(errs, errors.New("heartbeat.url must be an http(s) URL"))
 	}
+	if c.Auth != nil {
+		if c.Auth.User == "" {
+			errs = append(errs, errors.New("auth.user is required"))
+		}
+		if h, err := hex.DecodeString(c.Auth.PasswordSHA256); err != nil || len(h) != sha256.Size {
+			errs = append(errs, errors.New("auth.password_sha256 must be 64 hex chars (uptime-wisp -hash-password)"))
+		}
+	}
 	if len(c.Alerts) == 0 {
 		errs = append(errs, errors.New("at least one alert channel is required — an uptime monitor nobody hears is pointless"))
 	}
@@ -209,6 +228,12 @@ func Parse(b []byte) (*Config, error) {
 		return nil, fmt.Errorf("config: %w", err)
 	}
 	return &c, nil
+}
+
+// HashPassword returns the hex SHA-256 stored as auth.password_sha256.
+func HashPassword(password string) string {
+	h := sha256.Sum256([]byte(password))
+	return hex.EncodeToString(h[:])
 }
 
 func httpURL(s string) bool {
