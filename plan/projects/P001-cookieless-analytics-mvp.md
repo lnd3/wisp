@@ -143,8 +143,10 @@ full technical design.
 ### Phase 4 — External uptime monitoring (P001 scope item, decided 2026-10-01)
 - [x] Deploy tooling: `deploy/uptime-kuma/` (compose file, `deploy.sh`,
       README with a first-run monitor checklist). Tested locally
-- [ ] Deploy on `rbserver1` (user), create admin, pick a third-party
-      alert channel, add the README's monitors
+- [x] Deployed on `rbserver1` at `/opt/uptime-kuma` (2026-10-01):
+      healthy, 0 restarts, UI on `http://rbserver1.lan:3001`
+- [ ] User: create the admin account, pick a third-party alert channel,
+      add the README's monitors
 - [ ] Decide on the off-`rbserver1` dead-man's-switch instance (offgrid
       blind spot)
 
@@ -359,4 +361,13 @@ not gonna be using ailab anything, except uptime-kuma."
   channel and public-URL monitors for every product (all 11 URLs
   verified live), plus a DNS monitor for EphemNet's nameserver,
   certificate-expiry alerts, and the offgrid co-location blind spot.
+
+2026-10-01 (later) — **uptime-kuma deployed on `rbserver1`**
+(`/opt/uptime-kuma`, Compose project `wisp-uptime-kuma`, port 3001).
+First attempts were blocked until the user installed Docker (29.8.2,
+Compose v5.5.1), added `linus4637` to the `docker` group and created
+`/opt/uptime-kuma`. Reached from the dev machine as `rbserver1.lan`,
+because the bare `rbserver1` doesn't resolve under WSL. Host-key
+checking was kept via `HostKeyAlias=rbserver1`. Now waiting on the
+user's first-run setup in the web UI.
 

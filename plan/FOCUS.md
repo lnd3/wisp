@@ -35,9 +35,10 @@
 1. After 2026-10-02 02:10 UTC: check that the dashboard History shows
    cinderapps, offgridapp and wisp for 2026-10-01, plus the close log
    lines.
-2. Uptime monitoring: the user deploys `deploy/uptime-kuma/` on
-   `rbserver1` and picks a third-party alert channel. Then decide on
-   the off-`rbserver1` dead-man's-switch instance.
+2. Uptime monitoring: deployed on `rbserver1:3001`. The user creates
+   the admin account, picks a third-party alert channel and adds the
+   README's monitors. Then decide on the off-`rbserver1`
+   dead-man's-switch instance.
 3. EphemNet/persona integrations once they have Go handlers.
 4. D002 remaining: confirm the proposed numeric values; country/GeoIP
    undecided.
