@@ -30,8 +30,10 @@ deploy/uptime-kuma/deploy.sh user@host /srv/kuma --bind=127.0.0.1   # behind a T
 ```
 
 - Re-running **is** the update. It pulls the latest
-  `louislam/uptime-kuma:2` (the maintained 2.x line) and recreates
-  the container. **Don't** switch the tag to `1` or `latest`: both
+  `louislam/uptime-kuma:2-slim` (the maintained 2.x line, without the
+  embedded MariaDB and Chromium; SQLite only) and recreates the
+  container. Switch to plain `2` only if you add a "real browser"
+  monitor. **Don't** switch the tag to `1` or `latest`: both
   still point at v1, which is end-of-life with no security fixes. A
   major-version switch migrates the database one-way, so back up
   `data/` first (see Backup).

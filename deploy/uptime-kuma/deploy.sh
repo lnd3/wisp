@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Deploy (or update) wisp's uptime-kuma instance on any host over SSH:
 # sync the compose file and apply it remotely. No git and no build on
-# the host: it only pulls the louislam/uptime-kuma:2 image.
+# the host: it only pulls the louislam/uptime-kuma:2-slim image.
 #
 # Host prerequisites: Docker with the Compose v2 plugin
 # (`docker compose`), rsync, and the SSH user in the docker group.

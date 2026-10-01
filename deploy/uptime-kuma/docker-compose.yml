@@ -15,12 +15,16 @@
 
 services:
   uptime-kuma:
-    # The 2.x line: uptime-kuma's recommended tag, getting updates and
-    # security fixes within major version 2. Don't use `1` or `latest`:
-    # both still point at v1, which is end-of-life (no bug or security
-    # fixes). Moving from v1 migrates the database one-way on first start,
-    # so back up data/ before any major-version switch.
-    image: louislam/uptime-kuma:2
+    # The maintained 2.x line, slim variant: same app and updates as `2`,
+    # without the embedded MariaDB and the Chromium used by "real browser"
+    # monitors. About a quarter of the size, which matters on a Pi's SD
+    # card. Nothing here needs either: data is SQLite (data/kuma.db), and
+    # the README's monitors are HTTP(s)/DNS. Use plain `2` only if you
+    # add a browser-based monitor. Don't use `1` or `latest`: both still
+    # point at v1, which is end-of-life (no bug or security fixes).
+    # Moving from v1 migrates the database one-way, so back up data/
+    # before any major-version switch.
+    image: louislam/uptime-kuma:2-slim
     restart: unless-stopped
     ports:
       # Set via deploy.sh's --bind/--port (written to .env on the host).

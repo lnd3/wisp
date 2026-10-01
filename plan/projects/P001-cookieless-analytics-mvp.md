@@ -382,3 +382,13 @@ Pi. `deploy.sh` now also prunes dangling images after each update.
 The README warns against `1`/`latest`, and to back up before any
 major-version switch.
 
+2026-10-01 (later) — Switched to `louislam/uptime-kuma:2-slim` (user):
+867 MB on the Pi versus 2.52 GB for `:2`, the same 2.x updates, minus
+the embedded MariaDB and Chromium. Neither is needed: the DB is SQLite
+and the monitors are HTTP(s)/DNS. Backup before the switch:
+`/opt/uptime-kuma/backup-v2-20261001T194627Z.tgz`. The unused full
+image was removed. The user questioned the size ("we could build an
+uptime image that is 150MB"). Not pursued: uptime-kuma's bulk is
+Node and its dependencies, and a self-built image gives up upstream
+security updates.
+
