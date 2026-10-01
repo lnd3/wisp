@@ -1,12 +1,12 @@
 ---
 id: P001
 title: wisp MVP — cookieless pageview/visitor/download analytics, no consent banner
-status: PLANNING
+status: IN_PROGRESS
 priority: MEDIUM
 priority_drivers:
-  - strategic_edge
+- strategic_edge
 created: 2026-09-30
-updated: 2026-09-30
+updated: '2026-10-01'
 depends: []
 external_dependencies: []
 enables: []
@@ -72,7 +72,13 @@ full technical design.
       (`deploy/`) — ports/subnet checked live on `bh2`
 - [ ] `wisp.mera.network` zone entry in `bh2`'s EphemNet `zones.json`
       (EphemNet-side operator step — see `deploy/README.md`)
-- [ ] First live deploy (placeholder page) + privacy log check
+- [x] First live deploy (2026-10-01, commit 119ba44): both containers up
+      on bh2 at /opt/wisp/live. Verified: ingest 401 and dashboard 200
+      on the internal network, http→https 301 via nginx, 0 `remote_ip`
+      in Caddy's log, 0 wisp lines in nginx's access.log
+- [ ] TLS certificate: blocked on the DNS entry below; Caddy retries
+      ACME automatically (restart wisp-caddy once DNS exists to skip
+      its backoff)
 
 ### Phase 1 — Design decisions
 - [ ] Decide build-vs-adopt for real (see D001's Open Questions) —
@@ -163,4 +169,16 @@ ingest API → staging → day close → stats DB → dashboard, all tested.
 Remaining before it's live: DNS (the EphemNet zone entry), first
 deploy, and wiring the hook into a first product. Details in [[D001]]
 (dashboard) and [[D002]] (data path).
+
+2026-10-01 — **Deployed to bh2** (`/opt/wisp/live`, commit `119ba44`)
+on the user's go-ahead. Server-only config was created then: `.env`
+with the domain and the dashboard's bcrypt hash (user `wisp`; the
+password is in `/opt/wisp/.dashboard-password`, mode 0600, outside the
+synced tree) and an empty `products.json`. nginx fragments are
+installed; `nginx -t` passed. Everything on wisp's side verified (see
+Phase 0). **Not yet reachable by name:** `wisp.mera.network` still has
+no zone entry in EphemNet's live `zones.json`. bh2's ephemnetd answers
+it with the same synthesized SOA as an unregistered name, so Let's
+Encrypt gets NXDOMAIN. Adding that entry changes EphemNet's production
+data, so it was left for the user to authorize.
 

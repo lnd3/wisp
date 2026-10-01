@@ -11,10 +11,9 @@
   `deploy/`, adapted from persona/EphemNet/cinder, with ports and
   subnet checked live on `bh2`. It serves a placeholder page until an
   ingest API exists.
-- **The MVP is implemented in code**: the hook, ingest API, staging,
-  day close, stats DB and dashboard, plus the `wisp` service and
-  dashboard basic auth in `deploy/`. Not deployed yet (DNS). No
-  product is wired in yet.
+- **wisp is deployed on bh2** (2026-10-01, `/opt/wisp/live`). Both
+  containers run, and ingest, dashboard and logging are verified
+  internally. It can't be reached by name yet (no DNS, so no TLS).
 - **D001's revision to backend-only ingest.** Products' servers send
   unique events or (preferably) aggregates. No browser ever talks to
   wisp.
@@ -23,24 +22,24 @@
 
 ## Blocked
 
-- **First live deploy.** `wisp.mera.network` has no DNS yet. It needs
-  a zone entry in `bh2`'s EphemNet `zones.json` (direct mode,
-  158.174.211.245), done through EphemNet's operator process.
-- **Ingest wire format.** The batch shape is decided (per-key daily
-  distributions; keys deleted at day close). Still waiting on two
-  decisions that touch CLAUDE.md's invariants: which browser fields
-  beyond IP+UA go into the key, and whether the salt is per-product or
-  shared.
+- **TLS / public reachability.** `wisp.mera.network` needs a zone
+  entry in bh2's EphemNet `zones.json` (direct mode, 158.174.211.245).
+  That's EphemNet production data and awaits the user's go-ahead.
+  Once it exists, restart wisp-caddy so it retries ACME at once.
+
+- **D002 open questions (not blocking deploy).** The wire format is
+  implemented. Still open, because they touch CLAUDE.md's invariants:
+  key fields beyond IP+UA, salt scope (per-product vs shared), and
+  behaviour on a mid-day restart.
 
 ---
 
 ## Next
 
-1. Get the `wisp.mera.network` zone entry (EphemNet side). Then:
-   configure-nginx, create `.env` (including the dashboard credentials)
-   and `products.json`, deploy, and run the README's verification list
-   (privacy log check, ingest 401, dashboard 401/200).
-2. Wire the hook into a first product (persona is the smallest).
-   Confirm a real day closes and shows on the dashboard.
+1. Add the `wisp.mera.network` zone entry (EphemNet side), restart
+   wisp-caddy, then run the remaining checks: real cert, dashboard
+   401/200 through Caddy, ingest 401 from outside.
+2. Wire the hook into a first product (persona is the smallest): add
+   it to `products.json`, then restart wisp.
 3. Settle D002's open questions: key fields beyond IP+UA, salt scope,
    restart behaviour, and the proposed values.

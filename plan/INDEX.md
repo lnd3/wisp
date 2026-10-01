@@ -1,6 +1,6 @@
 # wisp Plan Index
 
-*Last updated: 2026-09-30 22:56:48 UTC*
+*Last updated: 2026-10-01 13:14:35 UTC*
 
 Status: `IDEA` · `PLANNING` · `IN_PROGRESS` · `BLOCKED` · `DONE` · `DEFERRED` · `CANCELLED`
 
@@ -26,7 +26,7 @@ Status: `IDEA` · `PLANNING` · `IN_PROGRESS` · `BLOCKED` · `DONE` · `DEFERRE
 
 | ID | Title | Status | Priority | Key Open Work |
 | --- | --- | --- | --- | --- |
-| [P001](projects/P001-cookieless-analytics-mvp.md) | wisp MVP — cookieless pageview/visitor/download analytics, no consent banner | PLANNING | MEDIUM | TBD |
+| [P001](projects/P001-cookieless-analytics-mvp.md) | wisp MVP — cookieless pageview/visitor/download analytics, no consent banner | IN_PROGRESS | MEDIUM | TBD |
 
 ---
 
