@@ -32,15 +32,19 @@ in-product `hook`, and forward to wisp server-to-server
 - **No raw IP persists anywhere, ever, under any configuration.** It
   exists only transiently in the *product's* request handler, inside
   wisp's `hook`, long enough to compute the day's visitor key, then is
-  discarded. wisp itself never receives one. This is a hard
+  discarded. wisp's ingest/staging/stats side never receives one.
+  wisp's own landing page is a product like any other: its handler
+  sees the visitor IP only inside wisp's own hook. This is a hard
   invariant, not a default — treat any code path that logs, stores, or
   forwards a raw IP as a bug, not a missed optimization. The same
   applies to the deployment: no access logs on wisp's nginx or Caddy
   layers (see `deploy/README.md`).
 - **The daily salt must never be derivable from what gets persisted.**
-  It lives only in the product process's memory for its own UTC day
-  and is discarded at rotation. wisp never receives, stores, or can
-  request it. Visitor keys must be HMACs under that salt, never a
+  It lives only in the product process's memory (inside its hook) for
+  its own UTC day and is discarded at rotation. wisp's ingest side never
+  receives, stores, or can request it. wisp's own landing-page hook
+  holds product `wisp`'s salt in memory exactly as any product does:
+  never persisted, never passed to staging. Visitor keys must be HMACs under that salt, never a
   plain hash: IPv4 × real User-Agents is small enough to brute-force.
   If a day's keys could ever be paired back up with that day's salt,
   the "cannot re-identify a visitor later, even by the operator" claim

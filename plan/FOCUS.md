@@ -31,11 +31,10 @@
 
 ## Next
 
-1. Wire the hook into a first product (persona is the smallest):
-   generate its token, add its hash to `/opt/wisp/live/deploy/products.json`,
-   restart wisp, set `WISP_TOKEN` in the product's own `.env`, call
-   `View`/`Download` at its key handlers, then deploy the product.
-2. Watch the first real day close (next day 02:00 UTC + up to 10 min)
-   and show on the dashboard.
+1. cinder's A022 (then offgrid's A012, also ready): wire the hook into cinderapps (in the cinder repo),
+   register `cinderapps` in `/opt/wisp/live/deploy/products.json`,
+   deploy, and watch the first day close onto the dashboard.
+2. EphemNet's A006 once its public pages have a Go handler (see that
+   action's unblock options); persona's A010 later still.
 3. Settle D002's open questions: key fields beyond IP+UA, salt scope,
    restart behaviour, and the proposed values.

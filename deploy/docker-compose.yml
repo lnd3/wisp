@@ -6,9 +6,10 @@
 # deploy/environments.sh) so "live" and "dev" never collide with each
 # other or with any other product's stack on the same host.
 #
-# Two services: wisp (the ingest API, cmd/wisp) on an internal-only
-# network, and wisp-caddy, which terminates TLS, reverse-proxies /v1/* to
-# wisp and serves the static site/ page for everything else.
+# Two services: wisp (cmd/wisp: the ingest API, dashboard and landing
+# page) on an internal-only network, and wisp-caddy, which terminates TLS
+# and reverse-proxies everything to wisp. The landing page is served by
+# wisp itself so wisp's own hook can count it (wisp as product "wisp").
 #
 # Ports and subnet checked LIVE against `bh2` on 2026-09-30 (docker ps,
 # docker network ls, ss -tln), not just inferred from other repos'
@@ -41,7 +42,6 @@ services:
       - WISP_DASHBOARD_HASH=${WISP_DASHBOARD_HASH:?set WISP_DASHBOARD_HASH in deploy/.env — see deploy/.env.example}
     volumes:
       - ./wisp-caddy/Caddyfile:/etc/caddy/Caddyfile:ro
-      - ../site:/srv/site:ro
       - wisp-caddy-data:/data
       - wisp-caddy-config:/config
     ports:
@@ -67,7 +67,22 @@ services:
     build:
       context: ..
       dockerfile: deploy/wisp/Dockerfile
+    command:
+      - "serve"
+      - "-addr=:8080"
+      - "-data=/data"
+      - "-registry=/etc/wisp/products.json"
+      # wisp's own landing page, counted by wisp's own hook.
+      - "-site=/srv/site"
+      # Only wisp-caddy (on wisp-internal) may set the visitor IP via
+      # X-Real-IP. Must match wisp-internal's pinned subnet below.
+      - "-trusted-proxies=${WISP_INTERNAL_SUBNET:-172.27.11.0/24}"
+    environment:
+      # wisp's own product token (registered as "wisp" in products.json).
+      # Optional: unset, the landing page is served but not counted.
+      - WISP_TOKEN=${WISP_TOKEN:-}
     volumes:
+      - ../site:/srv/site:ro
       # Server-only registry of product keys + token hashes (see
       # deploy/products.json.example and deploy/README.md). Excluded from
       # deploy.sh's rsync, like deploy/.env. After editing it, restart
@@ -88,9 +103,15 @@ networks:
       config:
         - subnet: ${WISP_EDGE_SUBNET:-172.27.1.0/24}
   # {wisp-caddy, wisp} only, so the app never sits on the edge network.
-  # internal: true — wisp itself needs no outbound internet access at all.
+  # internal: true — wisp itself needs no outbound internet access at all
+  # (its own hook reports over loopback). Pinned, not auto-assigned, so
+  # -trusted-proxies above can name it: 172.27.11.0/24 live /
+  # 172.27.12.0/24 dev, checked free on bh2 2026-10-01.
   wisp-internal:
     internal: true
+    ipam:
+      config:
+        - subnet: ${WISP_INTERNAL_SUBNET:-172.27.11.0/24}
 
 volumes:
   wisp-caddy-data:

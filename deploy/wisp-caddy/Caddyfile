@@ -67,9 +67,15 @@
 		}
 		reverse_proxy wisp:8080
 	}
+	# Everything else — the landing page — is served by wisp itself, so
+	# wisp's own hook can count it. X-Real-IP carries the visitor's
+	# address (recovered from nginx's PROXY protocol header); wisp trusts
+	# it only from this container's wisp-internal address, uses it
+	# transiently inside the hook, and never logs or stores it.
 	handle {
-		root * /srv/site
-		file_server
+		reverse_proxy wisp:8080 {
+			header_up X-Real-IP {http.request.remote.host}
+		}
 	}
 }
 

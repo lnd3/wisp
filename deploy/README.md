@@ -11,10 +11,11 @@ Two containers:
 - **`wisp`**: the server (`cmd/wisp`). It runs the ingest API that
   product hooks POST to, plus the day close. It sits on an
   internal-only network with no host port.
-- **`wisp-caddy`**: terminates TLS and reverse-proxies to `wisp`:
-  `/v1/*` for the ingest API, and `/dashboard/*` (behind HTTP Basic
-  Auth) for the operator dashboard. Everything else is the static page
-  (`site/index.html`).
+- **`wisp-caddy`**: terminates TLS and reverse-proxies everything to
+  `wisp`: `/v1/*` (ingest API), `/dashboard/*` (behind HTTP Basic
+  Auth), and the landing page. wisp serves the landing page itself
+  (`site/index.html`), so it can count its own visitors with its own
+  hook, as product `wisp`, exactly as other products integrate.
 
 **Day close:** every 10 minutes, and at startup, wisp closes each
 product-day that is past its deadline (day start + 26h). For each one
@@ -45,8 +46,8 @@ Internet ──▶ nginx (host, shared by every product on bh2) ─────�
                 │
                 ▼
           ┌─────┴──────────────┐
-          ▼ /v1/*, /dashboard/* (basic auth)      ▼ everything else
-       wisp :8080                             site/ (static, read-only mount)
+          ▼ /v1/*, /dashboard/* (basic auth), / (landing, X-Real-IP)
+       wisp :8080 — serves site/ itself; its own hook reports over loopback
        (wisp-internal network, internal: true; no host port)
           │
           ▼
@@ -69,6 +70,7 @@ anyway, as defense in depth:
 | nginx `:80` (`wisp-http01.conf`) | `access_log off` and `error_log … crit` in wisp's own vhost. **Not** in persona's or cinder's copies: Debian's stock `http{}` access log would otherwise record every plain-http visitor. |
 | wisp-caddy | No `log` directive in any site block, so there is no access log. The global `log` block drops `http.log.error` and `http.handlers.reverse_proxy`, the loggers that embed the request (and so `remote_ip`). |
 | wisp (`cmd/wisp`) | Logs only startup, registry reloads, day closes (product, day and visitor count) and internal failures, never request content. Tested: bad requests log nothing. |
+| wisp's landing page | wisp acts as a product here. Caddy sends `X-Real-IP`, and wisp trusts it only from wisp-caddy's `wisp-internal` address. The IP is used transiently inside wisp's own hook to derive the day key, then discarded. It is never logged and never stored: tested by grepping staging and stats for the test IP. The ingest/staging/stats side still never receives an IP. |
 | Docker `json-file` logs | Only what the above allows through: Caddy's ACME/TLS lifecycle and wisp's own lines. |
 
 Don't copy cinder's `monitor.sh` here: its usage digest works *by*
@@ -152,6 +154,11 @@ To add a product:
    `wisp` also reloads on SIGHUP, but a single-file bind mount goes
    stale if an editor replaces the file rather than rewriting it, so a
    restart is the reliable path.
+
+**wisp itself is a product** (`wisp`): generate its token the same
+way, put it in *wisp's own* `deploy/.env` as `WISP_TOKEN`, and register
+its hash as `"wisp"`. Unset, the landing page is served but not
+counted.
 
 **Rotation:** a product may list two hashes at once. Add the new hash,
 switch the product to the new token, then remove the old hash.

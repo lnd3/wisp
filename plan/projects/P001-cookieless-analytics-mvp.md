@@ -101,8 +101,16 @@ full technical design.
       rsync; `internal/registry`, `wisp hash-token`)
 - [x] `hook` package (D002 §1b): `Start`/`View`/`Download`/`Close`
       and the interval dispatcher. Stdlib-only Go (`hook/`).
-- [ ] Wire the hook into a first real product (TBD — persona's landing
-      page is the smallest candidate)
+- [ ] Wire the hook into products, in the user's order (2026-10-01):
+      1. `cinder:A022`, cinderapps.org (Go landing server, ready)
+         + `offgrid:A012`, offgridapp.mera.network (`cmd/landing`,
+         ready; its Caddyfile needs `X-Real-IP` added)
+      2. `EphemNet:A006`, eph.network + agent downloads (DEFERRED:
+         static pages; unblock options recorded there)
+      3. `persona:A010` (DEFERRED: static HTML until persona has a
+         web-facing Go service)
+- [x] wisp counts its own landing page with its own hook (product
+      `wisp`): `internal/site`, served by `wisp serve`
 - [ ] Bot/crawler filtering (likely product-side now, before aggregation)
 
 ### Phase 3 — Storage, rollups, dashboard
@@ -195,4 +203,44 @@ list all passed:
   nginx's access.log.
 
 Phase 0 is done. Next: wire the hook into a first product.
+
+2026-10-01 (later) — **Integration plan, per the user.** Hold off on
+persona: its site is static HTML, and the hook needs a Go request
+handler. I'd started filing a Go landing server for persona at
+`persona.solemn.network`; the user stopped it and asked why persona
+would need another web service. Answer: only to feed analytics, which
+is the wrong reason to add a service. Target cinder's web first, then
+EphemNet's. Integration details went into each product's own plan:
+- `cinder:A022` (PLANNING): concrete steps for `cmd/cinderapps` /
+  `landingweb.Handler`, with `X-Real-IP` trusted only from the edge
+  subnet.
+- `EphemNet:A006` (DEFERRED): its pages are static too. It records two
+  ways to unblock: a Go handler, or ephemnetd serving the trees.
+- `persona:A010` (DEFERRED): pick up when a web-facing Go service
+  exists.
+
+No wisp code changes were needed. Registering a product is an
+operator step (a token hash in `products.json`, then restart wisp).
+
+2026-10-01 (later) — Also filed `offgrid:A012` (PLANNING) at the
+user's request. offgrid is ready too: its deployed container runs
+`cmd/landing`, a Go server. Its Caddyfile still says "wisp … runs its
+own collector", which predates C001, so the integration adds
+`X-Real-IP` and pins `offgridapp-internal`'s subnet for the
+trusted-proxy check. persona's A010 already carried the details.
+
+2026-10-01 (later) — **wisp dogfoods its own hook**, per the user
+("obviously, we should have the integration in wisp.mera.network
+itself"). The landing page moved from Caddy's `file_server` into
+`wisp serve` (`internal/site`), so `GET /` is counted with
+`View(r, "/")`. Dashboard and ingest traffic are not counted. The hook
+reports as product `wisp`, over loopback to the same server (plain
+http is allowed only for loopback), and flushes before shutdown.
+`X-Real-IP` is trusted only from wisp-caddy, on `wisp-internal`, now
+pinned to 172.27.11.0/24 (checked free on bh2). CLAUDE.md's "wisp
+itself never receives [a raw IP]" was made precise: the
+ingest/staging/stats side still never does, while the landing handler
+sees it only inside the hook, like any product's handler. Local
+end-to-end: 1 visitor, 2 views, 1 referrer, HEAD not counted, and the
+test IP/UA in no stored file and not in the log.
 

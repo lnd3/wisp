@@ -19,3 +19,6 @@ Format: `YYYY-MM-DD | ID | old_status → new_status | note`
 2026-09-30 | P001 | PLANNING → PLANNING | Dashboard implemented; MVP complete in code (hook → ingest → staging → day close → stats → dashboard). Remaining: DNS, deploy, first product integration
 2026-10-01 | P001 | PLANNING → IN_PROGRESS | Deployed to bh2 /opt/wisp/live (119ba44); verified internally; public TLS blocked on wisp.mera.network DNS entry (EphemNet zones.json)
 2026-10-01 | P001 | IN_PROGRESS → IN_PROGRESS | Publicly live at https://wisp.mera.network (DNS added by user, LE cert issued); Phase 0 complete; external checklist passed
+2026-10-01 | P001 | IN_PROGRESS → IN_PROGRESS | Integration order set by user: cinder:A022 (cinderapps) → EphemNet:A006 (deferred, static) → persona:A010 (deferred, static); details filed in each repo's plan
+2026-10-01 | P001 | IN_PROGRESS → IN_PROGRESS | offgrid:A012 filed (ready: cmd/landing is Go); persona:A010 already had details
+2026-10-01 | P001 | IN_PROGRESS → IN_PROGRESS | wisp counts its own landing page with its own hook (product wisp, internal/site); wisp-internal subnet pinned

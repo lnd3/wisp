@@ -1,6 +1,8 @@
 // Command wisp runs wisp's server: the ingest API product hooks send to,
 // the day close that turns each product-day's keyed staging into keyless
-// rows in the product statistics DB, and the read-only dashboard over it.
+// rows in the product statistics DB, the read-only dashboard over it,
+// and wisp's own landing page — counted by wisp's own hook, as product
+// "wisp", reporting to this same server over loopback.
 //
 //	wisp serve [-addr :8080] [-data /data] [-registry /etc/wisp/products.json]
 //	wisp hash-token   < token   # prints the SHA-256 to put in the registry
@@ -25,10 +27,12 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/lnd3/wisp/hook"
 	"github.com/lnd3/wisp/internal/dashboard"
 	"github.com/lnd3/wisp/internal/dayclose"
 	"github.com/lnd3/wisp/internal/ingest"
 	"github.com/lnd3/wisp/internal/registry"
+	"github.com/lnd3/wisp/internal/site"
 	"github.com/lnd3/wisp/internal/staging"
 	"github.com/lnd3/wisp/internal/stats"
 )
@@ -75,7 +79,13 @@ func serve(args []string) error {
 	data := fs.String("data", "/data", "data directory: <data>/staging (keyed, per product-day) and <data>/stats.sqlite (keyless)")
 	regPath := fs.String("registry", "/etc/wisp/products.json", "product registry file (reloaded on SIGHUP)")
 	closeEvery := fs.Duration("close-every", 10*time.Minute, "how often to close product-days past their deadline")
+	siteDir := fs.String("site", "", "directory holding the landing page's index.html, served at / (empty = no landing page)")
+	trustedProxies := fs.String("trusted-proxies", "", "comma-separated CIDRs of the reverse proxy in front of wisp; only requests from these may set the visitor IP via X-Real-IP")
 	fs.Parse(args)
+	trusted, err := site.ParsePrefixes(*trustedProxies)
+	if err != nil {
+		return fmt.Errorf("-trusted-proxies: %w", err)
+	}
 
 	logger := log.New(os.Stderr, "wisp: ", log.LstdFlags|log.LUTC)
 
@@ -108,6 +118,30 @@ func serve(args []string) error {
 	// Read-only dashboard over the stats DB. Access control is Caddy's
 	// basic_auth in front of /dashboard/; only Caddy can reach wisp.
 	(&dashboard.Handler{Stats: statsDB, Log: logger}).Register(mux)
+
+	// wisp's own landing page, counted by wisp's own hook. The token is
+	// a product token like any other (WISP_TOKEN, registered as "wisp"
+	// in products.json); unset, the hook is a no-op. By default the hook
+	// reports over loopback to this very server, so self-reporting never
+	// leaves the container.
+	var self *hook.Hook
+	if *siteDir != "" {
+		endpoint := os.Getenv("WISP_ENDPOINT")
+		if endpoint == "" && os.Getenv("WISP_TOKEN") != "" {
+			endpoint = "http://127.0.0.1" + portOf(*addr) + "/v1/ingest"
+		}
+		self, err = hook.Start(hook.Config{
+			Endpoint:   endpoint,
+			ProductKey: "wisp",
+			Token:      os.Getenv("WISP_TOKEN"),
+			ClientIP:   site.TrustedClientIP(trusted),
+			OnError:    func(err error) { logger.Printf("self-report: %v", err) }, // hook errors never carry request data
+		})
+		if err != nil {
+			return err
+		}
+		(&site.Handler{Dir: *siteDir, Viewer: self}).Register(mux)
+	}
 	srv := &http.Server{
 		Addr:              *addr,
 		Handler:           mux,
@@ -164,5 +198,18 @@ func serve(args []string) error {
 	}
 	shutdown, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
+	// Flush the self-report first: it is sent to this same server, so
+	// the server must still be up to receive it.
+	if err := self.Close(shutdown); err != nil {
+		logger.Printf("self-report: %v", err)
+	}
 	return srv.Shutdown(shutdown)
+}
+
+// portOf returns ":8080" for ":8080", "0.0.0.0:8080" or "127.0.0.1:8080".
+func portOf(addr string) string {
+	if i := strings.LastIndex(addr, ":"); i >= 0 {
+		return addr[i:]
+	}
+	return ":" + addr
 }
