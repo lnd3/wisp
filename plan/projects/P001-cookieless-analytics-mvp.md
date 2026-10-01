@@ -49,12 +49,18 @@ full technical design.
   - **Portfolio-wide service health monitoring + mobile push alerts** —
     a real, undecided scope-expansion request from `EphemNet` (see
     Log, 2026-09-30); not started, not designed, not committed to.
-    Distinct from this project's core web-analytics scope (this would
-    be actively polling/receiving health signals from other repos'
-    running services — `cinder`, `EphemNet`, etc. — and pushing to a
-    lightweight desktop/mobile app, not passive pageview counting) —
-    needs its own design decision on whether it belongs in `wisp` at
-    all or should be a separate project, before any build starts.
+    Distinct from this project's core web-analytics scope.
+    **Shape settled (2026-10-01, user via superplan):** an *external*
+    prober that actively checks each product's public endpoint,
+    including doing its own DNS resolution. Not products
+    self-reporting: a dead machine, lost network or broken DNS can't
+    push its own "I'm down". It must run from a vantage point *not*
+    co-located with what it checks. **Consequence:** wisp itself runs on
+    `bh2` with the products, so the prober can't live in wisp's
+    deployment, whichever repo owns the code. Still undecided: whether
+    this belongs in `wisp` at all or in a separate project, and where
+    the prober runs (a separate VPS? the user's always-on machine?).
+    No design or build before those are decided.
 
 ## Linked
 
@@ -286,4 +292,13 @@ per the user.
 - Also updated all four product integration notes (cinder A022,
   offgrid A012, EphemNet A006, persona A010) to register via
   `ops.sh register`.
+
+2026-10-01 (later) — Steering note from superplan
+(`superplan/steering/outbox/wisp-todo-20261001T185615Z.md`, M002)
+resolves the health-monitoring item's "polling vs receiving"
+ambiguity, per the user: an external node actively probes product
+uptime, including DNS resolution, rather than products self-reporting.
+Added the consequence for this repo: wisp is co-located on bh2, so it
+can't host the prober. Ownership and placement remain open. Not a
+build request.
 
