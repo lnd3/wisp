@@ -96,7 +96,7 @@ origin. The original snippet design below predates that rule.
 **Ingest batch shape (decided 2026-09-30, per the user; fully specified in [[D002]]).** A product
 backend sends batches of **per-visitor daily distributions**:
 - **Key:** a visitor hash computed *product-side* from IP, User-Agent
-  and other common browser fields (see Open Questions: which fields).
+  only — no other headers (decided 2026-10-01; see Open Questions).
   It's scoped to one day.
 - **Properties per key, per day:** number of pages visited, total
   visits, and the page-visit keys (which pages), aggregated
@@ -268,39 +268,39 @@ verified with jsdom rather than assumed correct from reading the code.
   2026-09-30:** product-side; wisp receives per-key daily
   distributions and deletes the keys at day close (see How, "Ingest
   batch shape").
-- **(2026-09-30) Salt scope:** per-product salts, so the same visitor
-  on two products counts twice (simplest, and nothing cross-product
-  is ever linkable)? Or one salt shared across products, so wisp can
-  count uniques across products? A shared salt needs distributing
-  between products *without* wisp ever seeing it.
-- **(2026-09-30) "Other common browser fields" in the key: which
-  ones?** The README currently names only IP + User-Agent. Each extra
-  passive field (Accept-Language, Sec-CH-UA-*, …) makes keys more
-  distinct. That moves the count away from a deliberate lower bound
-  toward fingerprint-grade precision, which CLAUDE.md explicitly warns
-  against ("don't quietly chase more precision at the cost of the
-  privacy properties"). This needs an explicit decision, and the
-  README/T001 need updating to match.
-- **(2026-09-30) Day boundary + grace:** whose day (UTC?), how long
-  wisp keeps a day open for late batches before it aggregates and
-  deletes keys, and what happens to a batch arriving after close
-  (reject vs. count keyless).
-- **(2026-09-30) Product statistics DB layout:** one DB with a
-  product dimension, or one DB per product? And its schema for
-  accumulating daily distributions (e.g. summing histograms across
-  days is fine; summing daily uniques is not a multi-day unique
-  count).
-- **(2026-09-30) Wire format details:** page-visit keys as a set or
-  per-page counts? Batch idempotency/dedup on retry. Per-product auth
-  mechanism.
+- ~~Salt scope~~ **Resolved 2026-10-01 (user): per-product salts.**
+  The same visitor on two products is two keys. Nothing cross-product
+  is ever linkable, and no salt has to be shared between products.
+  Portfolio views are sums, labelled as visitor sums.
+- ~~Key fields beyond IP+UA~~ **Resolved 2026-10-01 (user): IP +
+  User-Agent only.** Candidates reviewed and rejected:
+  - `Accept-Language`: highly identifying with IP+UA, a classic
+    fingerprinting input.
+  - Default client hints (`Sec-CH-UA`, `-Mobile`, `-Platform`): mostly
+    duplicate the UA, and are Chromium-only, so they'd skew counts by
+    browser.
+  - High-entropy client hints: only sent when the site requests them,
+    which is active fingerprinting.
+  - `Accept`/`Accept-Encoding`: no signal.
+  - `Sec-GPC`/`DNT`: keying on a privacy signal would be perverse.
+
+  Each extra field trades the deliberate lower bound for fingerprint
+  precision, which CLAUDE.md rules out.
+- ~~Day boundary + grace~~ **Resolved (implemented, D002 §4):** UTC
+  days. A day closes at start + 26h (`hook.DayCloseAfter`). A late
+  batch gets 409 and the hook drops it.
+- ~~Product statistics DB layout~~ **Resolved (implemented, D002
+  §5):** one SQLite DB with a product column. Additive columns sum
+  over days; uniques sum to visitor-days.
+- ~~Wire format details~~ **Resolved (implemented, D002 §2):** page
+  keys as per-page counts, `batch_id` dedup, per-product bearer token.
 - ~~Product integration form~~ **Resolved 2026-09-30:** a hook
   library each product imports (`github.com/lnd3/wisp/hook`, see
   [[D002]] §1b). It runs inside the product and sends on an interval,
   only when there's data. The HTTP contract stays documented for
   non-Go callers.
-- **Salt rotation boundary**: strict UTC midnight vs. a rolling 24h
-  window from first use — affects how a visitor active right at the
-  boundary is counted (splits into two hashes either way). Not decided.
+- ~~Salt rotation boundary~~ **Resolved (implemented):** strict UTC
+  midnight, in the product's hook.
 - **Build vs. adopt**: still open at the project level (see [[P001]]'s
   Tasks) — this design assumes a from-scratch build but doesn't yet
   justify that over configuring GoatCounter/Plausible/Umami in their
@@ -325,6 +325,11 @@ verified with jsdom rather than assumed correct from reading the code.
   from before this repo existed.
 
 ## Log
+
+2026-10-01 (later) — User decisions: per-product salts, and IP +
+User-Agent only as key inputs. Older questions already answered by the
+implementation (day boundary, stats DB layout, wire format, rotation
+boundary) are marked resolved with pointers.
 
 2026-09-30 (later) — **Dashboard implemented** (`internal/dashboard`,
 served by `wisp serve` at `/dashboard/`). It covers this design's

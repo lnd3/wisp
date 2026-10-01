@@ -90,7 +90,7 @@ For each countable hit:
 ```
 page_key = route template, never the raw path     e.g. "/notes/:id", not "/notes/7Hq…"
                                                   no query string, no fragment
-key      = base64url( HMAC-SHA256(salt_d, ipnorm ‖ 0x1F ‖ ua [‖ 0x1F ‖ extra fields…])[:16] )
+key      = base64url( HMAC-SHA256(salt_d, ipnorm ‖ 0x1F ‖ ua)[:16] )   (IP + UA only — decided)
 ipnorm   = IPv4 as-is; IPv6 truncated to its /64                    (proposed)
 salt_d   = 32 random bytes, generated in memory at 00:00 UTC of day d,
            never written anywhere, discarded at the next rotation
@@ -489,13 +489,11 @@ N/A. Greenfield.
 
 ## Open Questions
 
-- **Key fields beyond IP+UA:** each added field makes keys more
-  distinct, trending from a lower bound toward fingerprinting (see
-  D001). The default here is IP+UA only until decided.
-- **Salt scope:** per-product (the default here) vs. shared across
-  products. Shared allows portfolio-wide uniques, but the products
-  must exchange a salt wisp never sees. Also: a product running
-  several replicas needs them to share one salt.
+- ~~Key fields beyond IP+UA~~ **Resolved 2026-10-01 (user): IP + UA
+  only.** See D001's Open Questions for the candidates reviewed.
+- ~~Salt scope~~ **Resolved 2026-10-01 (user): per-product.** Note
+  for later: a product running several replicas would need them to
+  share one salt. None does today.
 - ~~**Restart mid-day**~~ **Resolved 2026-10-01: accept the
   over-count.** When a product process restarts, it gets a fresh salt,
   and a visitor returning later that day is counted again. The user's
@@ -522,6 +520,11 @@ N/A. Greenfield.
 - Thesis: [[T001]]
 
 ## Log
+
+2026-10-01 (later) — Resolved by the user: per-product salts, and IP +
+UA only as key inputs (already what the hook does). Remaining open:
+the proposed numeric values (flush interval, grace, buckets, limits)
+and country/GeoIP.
 
 2026-10-01 (later) — Restart mid-day resolved by the user: accept
 the double count; the salt stays process-only. See Open Questions.

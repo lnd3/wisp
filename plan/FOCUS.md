@@ -36,5 +36,4 @@
    cinderapps and wisp for 2026-10-01, and the close log line.
 2. offgrid's A012 (ready). Then EphemNet/persona once they have Go
    handlers.
-3. Settle D002's open questions: key fields, salt scope, restart
-   behaviour, proposed values.
+3. D002 remaining: confirm the proposed numeric values (flush interval, grace, buckets, limits); country/GeoIP still undecided.

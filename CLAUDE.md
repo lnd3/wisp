@@ -44,7 +44,14 @@ in-product `hook`, and forward to wisp server-to-server
   its own UTC day and is discarded at rotation. wisp's ingest side never
   receives, stores, or can request it. wisp's own landing-page hook
   holds product `wisp`'s salt in memory exactly as any product does:
-  never persisted, never passed to staging. Visitor keys must be HMACs under that salt, never a
+  never persisted, never passed to staging.
+- **Visitor keys are HMAC(salt, IP + User-Agent) — nothing else, and
+  salts are per product.** No other headers in the key (no
+  Accept-Language, no client hints): each one trades the lower bound
+  for fingerprint precision. No shared cross-product salt: the same
+  person on two products must stay two unlinkable keys. Both decided
+  by the user on 2026-10-01; changing either is a privacy decision, not
+  a tuning knob. Visitor keys must be HMACs under that salt, never a
   plain hash: IPv4 × real User-Agents is small enough to brute-force.
   If a day's keys could ever be paired back up with that day's salt,
   the "cannot re-identify a visitor later, even by the operator" claim
