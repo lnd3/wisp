@@ -1,0 +1,32 @@
+{
+  "interval": "60s",
+  "timeout": "10s",
+  "failures_before_alert": 2,
+  "cert_warn_days": 14,
+  "resolver": "1.1.1.1:53",
+
+  "alerts": [
+    { "type": "ntfy", "url": "https://ntfy.sh/REPLACE-WITH-A-LONG-RANDOM-TOPIC" }
+  ],
+
+  "checks": [
+    { "name": "wisp",                "type": "http", "url": "https://wisp.mera.network/" },
+    { "name": "wisp ingest API",     "type": "http", "url": "https://wisp.mera.network/v1/ingest", "expect_status": [405] },
+
+    { "name": "cinderapps.org",      "type": "http", "url": "https://cinderapps.org/" },
+    { "name": "cindernote",          "type": "http", "url": "https://noteshare.cinderapps.org/" },
+    { "name": "cinderchat",          "type": "http", "url": "https://chatgroups.cinderapps.org/" },
+    { "name": "cindertransfer",      "type": "http", "url": "https://fileshare.cinderapps.org/" },
+    { "name": "cindertunnel",        "type": "http", "url": "https://tunnelapp.cinderapps.org/" },
+    { "name": "vigil",               "type": "http", "url": "https://vigil.cinderapps.org/" },
+
+    { "name": "eph.network",         "type": "http", "url": "https://eph.network/" },
+    { "name": "agent.eph.network",   "type": "http", "url": "https://agent.eph.network/" },
+    { "name": "mera.network DNS",    "type": "dns",  "host": "wisp.mera.network", "server": "158.174.211.245", "expect": ["158.174.211.245"] },
+    { "name": "ns1.mera.network resolves", "type": "dns", "host": "ns1.mera.network", "server": "1.1.1.1" },
+
+    { "name": "solemn.network",      "type": "http", "url": "https://solemn.network/" },
+
+    { "name": "offgridapp",          "type": "http", "url": "https://offgridapp.mera.network/" }
+  ]
+}

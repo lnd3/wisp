@@ -1,0 +1,26 @@
+# uptime-wisp: wisp's own lightweight external uptime prober (P001's
+# health-monitoring item). Never run directly: deploy/uptime/deploy.sh
+# cross-compiles the binary, syncs this directory and runs it as Compose
+# project "uptime-wisp" on whichever host you name.
+#
+# config.json (checks, alert channel, optional heartbeat) lives only on
+# the host: it holds the alert channel's secret (e.g. the ntfy topic), so
+# it's never synced or committed. Start from config.example.json.
+
+services:
+  uptime-wisp:
+    build: .
+    image: uptime-wisp:local
+    restart: unless-stopped
+    ports:
+      # Status page + /healthz. --bind/--port in deploy.sh (kept in .env
+      # on the host). 0.0.0.0 suits a LAN box like rbserver1; use
+      # 127.0.0.1 behind a proxy on anything internet-facing.
+      - "${UPTIME_BIND:-0.0.0.0}:${UPTIME_PORT:-8080}:8080"
+    volumes:
+      - ./config.json:/etc/uptime-wisp/config.json:ro
+    # It only makes outbound requests and serves one page, so lock it down.
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 64m

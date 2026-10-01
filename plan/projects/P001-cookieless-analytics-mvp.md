@@ -75,8 +75,10 @@ full technical design.
     superplan). **Open dependency:** the alert
     delivery path. Push notifications must not route through something
     hosted on `bh2` (or on `rbserver1` alone), or that machine's outage
-    silences its own alert. **Decided 2026-10-01 (user):** wisp owns this, and
-    the tool is uptime-kuma, reused rather than built custom. Nothing
+    silences its own alert. **Decided 2026-10-01 (user):** wisp owns this. The tool
+    was first uptime-kuma, then **reversed the same day: build our own
+    lightweight prober** (`uptime-wisp`: Go, stdlib only, on alpine),
+    after uptime-kuma's slim image turned out to be 867 MB. Nothing
     else is taken from ailab. Deploy tooling: `deploy/uptime-kuma/`
     (generic, any host over SSH; the user deploys it on `rbserver1`).
     Still open: the alert channel (must be third-party; chosen in
@@ -140,15 +142,17 @@ full technical design.
       `wisp`): `internal/site`, served by `wisp serve`
 - [ ] Bot/crawler filtering (likely product-side now, before aggregation)
 
-### Phase 4 — External uptime monitoring (P001 scope item, decided 2026-10-01)
-- [x] Deploy tooling: `deploy/uptime-kuma/` (compose file, `deploy.sh`,
-      README with a first-run monitor checklist). Tested locally
-- [x] Deployed on `rbserver1` at `/opt/uptime-kuma` (2026-10-01):
-      healthy, 0 restarts, UI on `http://rbserver1.lan:3001`
-- [ ] User: create the admin account, pick a third-party alert channel,
-      add the README's monitors
-- [ ] Decide on the off-`rbserver1` dead-man's-switch instance (offgrid
-      blind spot)
+### Phase 4 — External uptime monitoring (own prober, decided 2026-10-01)
+- [x] ~~uptime-kuma~~ deployed, then removed (867 MB image; user: "not
+      acceptable … build our own lightweight uptime lib")
+- [x] `uptime` package + `cmd/uptime-wisp`: HTTP(S) and DNS checks, own
+      resolver, cert-expiry warnings, alert on state change (ntfy /
+      webhook), optional outgoing heartbeat, status page
+- [x] `deploy/uptime/`: 16.8 MB alpine image (vs 867 MB), generic SSH
+      deploy (cross-compiles, validates the host config before
+      replacing the running prober)
+- [ ] Deploy on `rbserver1`: needs a writable directory and the user's
+      alert channel (ntfy topic) in the host-only config.json
 
 ### Phase 3 — Storage, rollups, dashboard
 - [x] Day close + product statistics DB (D002 §4–5): `internal/stats`,
@@ -391,4 +395,34 @@ image was removed. The user questioned the size ("we could build an
 uptime image that is 150MB"). Not pursued: uptime-kuma's bulk is
 Node and its dependencies, and a self-built image gives up upstream
 security updates.
+
+2026-10-01 (later) — **Reversed: our own prober instead of
+uptime-kuma.** The user, on learning the slim image is 867 MB (Node,
+its dependencies, the Azure/AWS SDKs, cloudflared): "That is not
+acceptable … Dump this shit. Let's build our own lightweight uptime
+lib that runs on docker alpine." uptime-kuma was removed from
+`rbserver1` (container, image, data) and from the repo. Scope is
+exactly what this item requires:
+- HTTP(S) checks, with the prober's own DNS through a configured
+  external resolver.
+- DNS checks against a named nameserver.
+- TLS verification with expiry warnings.
+- Alerts only on state change, via ntfy or a generic webhook (both
+  third-party, independent of bh2/rbserver1).
+- An optional outgoing heartbeat for a third-party dead-man service.
+- A tiny LAN status page.
+
+2026-10-01 (later) — **uptime-wisp built** (image name per the user).
+- **Code:** package `uptime` (stdlib only) and `cmd/uptime-wisp`
+  (`-once`, `-test-alert`, exit 2 for a bad config). A 7.6 MB static
+  binary; the image is **16.8 MB**, running as uid 1000 with a
+  read-only root, all capabilities dropped and a 64 MB memory cap.
+- **Tests:** state machine (no alert on a single blip, one down and
+  one up, certificate warning once per renewal), retries, payloads,
+  real HTTP/TLS against httptest, and real DNS against a minimal fake
+  UDP server. A mutation check on the repeat-down guard was caught.
+- **Live `-once` run:** all product URLs ok. It **found a real EphemNet
+  bug**: `ns1`/`ns2.mera.network` return NXDOMAIN publicly, because
+  ephemnetd answers its own NS names with a synthesized SOA. The `.network`
+  glue keeps delegation working. Flagged to the user, not fixed here.
 

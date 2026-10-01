@@ -33,3 +33,5 @@ Format: `YYYY-MM-DD | ID | old_status → new_status | note`
 2026-10-01 | P001 | IN_PROGRESS → IN_PROGRESS | uptime-kuma deployed on rbserver1:/opt/uptime-kuma (healthy); awaiting user's first-run setup (admin, alert channel, monitors)
 2026-10-01 | P001 | IN_PROGRESS → IN_PROGRESS | uptime-kuma switched to maintained :2 (v1 EOL); empty v1 DB backed up + migrated; v1 image removed
 2026-10-01 | P001 | IN_PROGRESS → IN_PROGRESS | uptime-kuma → :2-slim (867MB vs 2.52GB); SQLite + HTTP/DNS monitors need neither MariaDB nor Chromium
+2026-10-01 | P001 | IN_PROGRESS → IN_PROGRESS | uptime-kuma removed (867MB); decision reversed by user: build own lightweight prober (Go stdlib, alpine)
+2026-10-01 | P001 | IN_PROGRESS → IN_PROGRESS | uptime-wisp built (Go stdlib, 16.8MB alpine image) + deploy/uptime; found EphemNet ns1/ns2.mera.network NXDOMAIN bug
