@@ -244,3 +244,26 @@ sees it only inside the hook, like any product's handler. Local
 end-to-end: 1 visitor, 2 views, 1 referrer, HEAD not counted, and the
 test IP/UA in no stored file and not in the log.
 
+2026-10-01 (later) — **Self-integration deployed (446b473), plus a
+registry incident and its fix.**
+- **Incident.** While registering product `wisp`, I replaced
+  `products.json` with a freshly written file. That wiped the
+  `cinderapps` entry a cinder session had added minutes earlier, so
+  cinderapps' batches got 401 and were dropped from about 14:35 to
+  14:39 UTC. I restored the entry from my own command output and
+  checked the hash against the token in cinder's `.env`. `deploy.sh`
+  itself was never at fault: rsync excludes the file.
+- **Fix:** `deploy/ops.sh … register <product>` (token on stdin, hashed
+  locally, only the SHA-256 is sent). It merges and never overwrites,
+  is idempotent, allows 2-hash rotation, refuses cross-product hashes,
+  backs up to `/opt/wisp/.products-backups/`, validates, swaps
+  atomically, and restarts wisp only on change. `ops.sh … registry`
+  lists entries. Tested against a scratch registry through a stand-in
+  ssh before use.
+- **Live state 14:45 UTC:** cinderapps has 4 visitors and 7 views in
+  staging; wisp has 1 visitor and 1 view of `/`. The tester's IP is in
+  no staging or stats file. Products appear on the dashboard only when
+  a day closes, first at 2026-10-02 02:00 UTC. A curl-UA visit isn't
+  counted (bot list), which looked like "self-report not working"
+  until tested with a browser UA.
+

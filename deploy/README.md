@@ -138,30 +138,41 @@ Each product that reports to wisp has a **product key** (its public
 identifier) and an **auth token** (its secret). wisp keeps only the
 token's SHA-256, never the token itself.
 
-To add a product:
-1. Generate a token wherever the product's own secrets live, and put
-   it in *that product's* `deploy/.env` as `WISP_TOKEN`:
-   `openssl rand -hex 32`
-2. Hash it with the wisp image, so no Go toolchain is needed on the
-   server:
-   ```bash
-   echo "$TOKEN" | docker run --rm -i wisp-live-wisp hash-token
-   ```
-3. Add `{"key": "<product>", "token_sha256": ["<hash>"]}` to
-   `products.json`. Keys are lowercase, `[a-z0-9-]`, at most 63
-   characters.
-4. Restart wisp: `deploy/ops.sh bh2 /opt/wisp live restart wisp`.
-   `wisp` also reloads on SIGHUP, but a single-file bind mount goes
-   stale if an editor replaces the file rather than rewriting it, so a
-   restart is the reliable path.
+`products.json` is **shared state**: every product registers itself
+there, often from its own repo's session. `deploy.sh` never syncs it
+(rsync `--exclude`), and it must never be hand-rewritten either. On
+2026-10-01 a hand-written replacement wiped cinder's entry. Always
+register through `ops.sh`, which only merges:
+
+```bash
+# 1. Generate the token wherever the product's own secrets live; it goes
+#    into *that product's* deploy/.env as WISP_TOKEN.
+TOKEN=$(openssl rand -hex 32)
+# 2. From a wisp checkout: hash locally, merge on the server, restart wisp.
+echo "$TOKEN" | deploy/ops.sh bh2 /opt/wisp live register <product-key>
+deploy/ops.sh bh2 /opt/wisp live registry     # list what's registered
+```
+
+`register`:
+- Keeps every other product.
+- Is a no-op (and no restart) if the token is already registered.
+- Adds a second hash for an existing key, for rotation (max 2).
+- Refuses a token another product already uses.
+- Backs up the previous file to `/opt/wisp/.products-backups/live/`,
+  validates the JSON, swaps it in atomically, and restarts wisp.
+
+Only the token's SHA-256 ever leaves your machine. Keys are lowercase
+`[a-z0-9-]`, at most 63 characters.
 
 **wisp itself is a product** (`wisp`): generate its token the same
-way, put it in *wisp's own* `deploy/.env` as `WISP_TOKEN`, and register
-its hash as `"wisp"`. Unset, the landing page is served but not
+way, put it in *wisp's own* `deploy/.env` as `WISP_TOKEN`, and
+`register wisp`. Unset, the landing page is served but not
 counted.
 
-**Rotation:** a product may list two hashes at once. Add the new hash,
-switch the product to the new token, then remove the old hash.
+**Rotation:** `register` the new token (the key then has two hashes),
+switch the product to the new token, then remove the old hash. Removal
+is still a careful hand-edit: read the file, drop one hash, keep a
+backup, and restart wisp.
 
 ## Redeploying (`deploy/deploy.sh`, from the dev machine)
 

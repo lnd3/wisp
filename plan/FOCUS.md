@@ -11,9 +11,10 @@
   `deploy/`, adapted from persona/EphemNet/cinder, with ports and
   subnet checked live on `bh2`. It serves a placeholder page until an
   ingest API exists.
-- **wisp is live at https://wisp.mera.network** (bh2,
-  `/opt/wisp/live`, build `119ba44`). Public checks have passed. No
-  product reports to it yet, so the dashboard shows no closed days.
+- **wisp is live and counting**: cinderapps (cinder's A022, done from
+  cinder's side) and wisp's own landing page report into staging. The
+  first day closes onto the dashboard at 2026-10-02 02:00 UTC.
+  Products register with `deploy/ops.sh … register <key>` (merge-only).
 - **D001's revision to backend-only ingest.** Products' servers send
   unique events or (preferably) aggregates. No browser ever talks to
   wisp.
@@ -31,10 +32,12 @@
 
 ## Next
 
-1. cinder's A022 (then offgrid's A012, also ready): wire the hook into cinderapps (in the cinder repo),
-   register `cinderapps` in `/opt/wisp/live/deploy/products.json`,
-   deploy, and watch the first day close onto the dashboard.
-2. EphemNet's A006 once its public pages have a Go handler (see that
-   action's unblock options); persona's A010 later still.
-3. Settle D002's open questions: key fields beyond IP+UA, salt scope,
-   restart behaviour, and the proposed values.
+1. After 2026-10-02 02:10 UTC: check that the dashboard shows
+   cinderapps and wisp for 2026-10-01, and the close log line.
+2. Update the four product integration notes (cinder A022, offgrid
+   A012, EphemNet A006, persona A010): step 6 should use
+   `ops.sh register` instead of hand-editing `products.json`.
+3. offgrid's A012 (ready). Then EphemNet/persona once they have Go
+   handlers.
+4. Settle D002's open questions: key fields, salt scope, restart
+   behaviour, proposed values.
