@@ -463,3 +463,23 @@ refuses to start without it.
   `/opt/uptime-wisp/.status-password` (0600).
 - **Caveat:** Basic Auth over plain HTTP is LAN-grade.
 
+2026-10-01 (later) — **uptime-wisp: "Reload config" button** (user
+request), plus SIGHUP.
+- **One loader** for startup and every reload: same validation and
+  auth rule, so a reload can't accept what a restart would reject. An
+  invalid file is rejected with the running config kept, and the error
+  is shown on the page.
+- **State is kept** for checks whose name, type and target are
+  unchanged (no spurious alerts). New, changed and removed checks are
+  counted in the result message.
+- **Applied between rounds** (a reload waits on the round lock;
+  mutation-checked), then a round runs at once.
+- **The POST** sits behind the login and is refused cross-site
+  (Sec-Fetch-Site/Origin), because browsers attach cached Basic Auth.
+  The login is read per request, so a password change applies on
+  reload.
+- **Config now lives in a mounted directory**
+  (`<remote-dir>/config/config.json`): a single-file bind mount would
+  miss editors that save by rename. `deploy.sh` migrates the old
+  layout once.
+

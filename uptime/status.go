@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"html/template"
 	"net/http"
+	"net/url"
 	"time"
 )
 
@@ -40,8 +41,14 @@ table{border-collapse:collapse;width:100%}th,td{text-align:left;padding:6px 8px;
 th{color:var(--muted);font-weight:500;border-top:0}td.n{font-variant-numeric:tabular-nums;white-space:nowrap}
 .s{font-weight:600;white-space:nowrap}.s::before{content:"";display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;background:var(--unk)}
 .up::before{background:var(--up)}.down::before{background:var(--down)}.t{color:var(--muted);word-break:break-all}
+.bar{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;margin:0 0 12px}.bar p{margin:0}
+button{font:inherit;padding:4px 12px;border-radius:6px;border:1px solid var(--line);background:transparent;color:var(--fg);cursor:pointer}
+.rl{margin:0 0 12px;padding:6px 10px;border-radius:6px;border-left:3px solid var(--up)}.rl.err{border-left-color:var(--down)}
 </style></head><body><main>
-<h1>uptime-wisp</h1><p>{{len .States}} checks every {{.Interval}} · last round {{ago .Last}} · refreshes every 30s</p>
+<h1>uptime-wisp</h1>
+<div class="bar"><p>{{len .States}} checks every {{.Interval}} · last round {{ago .Last}} · refreshes every 30s</p>
+<form method="post" action="/reload"><button type="submit" title="Re-read config.json and apply it; an invalid file is rejected and the running config kept">Reload config</button></form></div>
+{{with .Reload}}<p class="rl{{if not .OK}} err{{end}}">{{.Time.Format "15:04:05 UTC"}}: {{.Message}}</p>{{end}}
 <table><thead><tr><th>Status</th><th>Check</th><th>Detail</th><th>Latency</th><th>Since</th><th>Cert expires in</th></tr></thead><tbody>
 {{range .States}}<tr><td class="s {{.Status}}">{{.Status}}</td><td>{{.Name}}<div class="t">{{.Target}}</div></td><td>{{.Detail}}</td><td class="n">{{ms .Latency}}</td><td class="n">{{ago .Since}}</td><td class="n">{{days .CertExpiry}}</td></tr>
 {{end}}</tbody></table></main></body></html>`))
@@ -55,17 +62,33 @@ func (m *Monitor) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /{$}", m.requireAuth(func(w http.ResponseWriter, r *http.Request) {
 		states, last := m.Snapshot()
+		m.mu.Lock()
+		reload := m.lastReload
+		m.mu.Unlock()
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'")
+		w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'")
+		w.Header().Set("Cache-Control", "no-store")
 		statusPage.Execute(w, struct {
 			States   []State
 			Last     time.Time
 			Interval time.Duration
-		}{states, last, m.cfg.Interval.Duration})
+			Reload   *ReloadResult
+		}{states, last, m.config().Interval.Duration, reload})
+	}))
+	// Reload re-reads config.json. Behind the login, and refused for
+	// cross-site requests: a browser would otherwise attach the cached
+	// Basic Auth credentials to a POST another site makes.
+	mux.HandleFunc("POST /reload", m.requireAuth(func(w http.ResponseWriter, r *http.Request) {
+		if crossSite(r) {
+			http.Error(w, "cross-site request refused", http.StatusForbidden)
+			return
+		}
+		m.Reload()
+		http.Redirect(w, r, "/", http.StatusSeeOther)
 	}))
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		_, last := m.Snapshot()
-		if last.IsZero() || m.now().Sub(last) > 3*m.cfg.Interval.Duration {
+		if last.IsZero() || m.now().Sub(last) > 3*m.config().Interval.Duration {
 			http.Error(w, "no recent round", http.StatusServiceUnavailable)
 			return
 		}
@@ -74,16 +97,18 @@ func (m *Monitor) Handler() http.Handler {
 	return mux
 }
 
-// requireAuth wraps h in HTTP Basic Auth when cfg.Auth is set. Both the
-// user and the password hash are compared in constant time.
+// requireAuth wraps h in HTTP Basic Auth when the current config has
+// auth. Read per request, so a reload can change the credentials. Both
+// the user and the password hash are compared in constant time.
 func (m *Monitor) requireAuth(h http.HandlerFunc) http.HandlerFunc {
-	a := m.cfg.Auth
-	if a == nil {
-		return h
-	}
-	wantUser := sha256.Sum256([]byte(a.User))
-	wantPass, _ := hex.DecodeString(a.PasswordSHA256)
 	return func(w http.ResponseWriter, r *http.Request) {
+		a := m.config().Auth
+		if a == nil {
+			h(w, r)
+			return
+		}
+		wantUser := sha256.Sum256([]byte(a.User))
+		wantPass, _ := hex.DecodeString(a.PasswordSHA256)
 		user, pass, ok := r.BasicAuth()
 		gotUser := sha256.Sum256([]byte(user))
 		gotPass := sha256.Sum256([]byte(pass))
@@ -96,4 +121,19 @@ func (m *Monitor) requireAuth(h http.HandlerFunc) http.HandlerFunc {
 		}
 		h(w, r)
 	}
+}
+
+// crossSite reports a request made by another site's page: the browser's
+// Sec-Fetch-Site says so, or an Origin header names a different host.
+func crossSite(r *http.Request) bool {
+	if site := r.Header.Get("Sec-Fetch-Site"); site != "" && site != "same-origin" && site != "none" {
+		return true
+	}
+	if origin := r.Header.Get("Origin"); origin != "" {
+		u, err := url.Parse(origin)
+		if err != nil || u.Host != r.Host {
+			return true
+		}
+	}
+	return false
 }

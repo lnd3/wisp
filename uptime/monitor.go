@@ -40,12 +40,32 @@ type Monitor struct {
 	now      func() time.Time
 	backoff  []time.Duration // alert delivery retries
 
-	// check is the probe function; tests replace it.
-	check func(ctx context.Context, c CheckConfig) Result
+	roots *x509.CertPool
 
-	mu        sync.Mutex
-	states    []*State
-	lastRound time.Time
+	// check is the probe function; tests replace it (and clear
+	// checkIsProber so a reload doesn't swap it back).
+	check         func(ctx context.Context, c CheckConfig) Result
+	checkIsProber bool
+
+	// roundMu is held for a whole round, and by a reload while it swaps
+	// the config: a round's results always match the check list it
+	// started with.
+	roundMu sync.Mutex
+
+	mu         sync.Mutex // guards cfg, prober, check, alerters, states and the fields below
+	states     []*State
+	lastRound  time.Time
+	loader     func() (*Config, error)
+	lastReload *ReloadResult
+	reloaded   chan struct{} // tells Run to reset its ticker and run a round now
+}
+
+// ReloadResult is the outcome of the last config reload, shown on the
+// status page.
+type ReloadResult struct {
+	Time    time.Time
+	OK      bool
+	Message string
 }
 
 // Options for New. All optional.
@@ -64,29 +84,118 @@ func New(cfg *Config, o Options) *Monitor {
 		o.Now = time.Now
 	}
 	m := &Monitor{
-		cfg:      cfg,
-		prober:   newProber(cfg, o.Roots),
-		hbClient: &http.Client{Timeout: cfg.Timeout.Duration},
-		log:      o.Log,
-		now:      o.Now,
-		backoff:  []time.Duration{2 * time.Second, 10 * time.Second},
+		log:           o.Log,
+		now:           o.Now,
+		roots:         o.Roots,
+		backoff:       []time.Duration{2 * time.Second, 10 * time.Second},
+		checkIsProber: true,
+		reloaded:      make(chan struct{}, 1),
 	}
-	m.check = m.prober.run
+	m.applyConfig(cfg)
+	return m
+}
+
+// applyConfig installs cfg: a new prober, alert channels and check
+// list. A check keeps its state (status, since, failure count) when its
+// name, type and target are unchanged, so a reload never fires
+// spurious alerts; changed or new checks start unknown. The caller must
+// hold roundMu (or be New).
+func (m *Monitor) applyConfig(cfg *Config) (added, removed, changed int) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	old := map[string]*State{}
+	for _, s := range m.states {
+		old[s.Name] = s
+	}
+	var states []*State
+	for _, c := range cfg.Checks {
+		if s, ok := old[c.Name]; ok && s.Type == c.Type && s.Target == c.Target() {
+			states = append(states, s)
+			delete(old, c.Name)
+			continue
+		} else if ok {
+			changed++
+			delete(old, c.Name)
+		} else if m.cfg != nil {
+			added++
+		}
+		states = append(states, &State{Name: c.Name, Type: c.Type, Target: c.Target(), Status: StatusUnknown})
+	}
+	removed = len(old)
+
+	m.cfg = cfg
+	m.states = states
+	m.prober = newProber(cfg, m.roots)
+	if m.checkIsProber {
+		m.check = m.prober.run
+	}
+	m.hbClient = &http.Client{Timeout: cfg.Timeout.Duration}
 	alertClient := &http.Client{Timeout: 15 * time.Second}
+	m.alerters = nil
 	for _, a := range cfg.Alerts {
 		m.alerters = append(m.alerters, newAlerter(a, alertClient))
 	}
-	for _, c := range cfg.Checks {
-		m.states = append(m.states, &State{Name: c.Name, Type: c.Type, Target: c.Target(), Status: StatusUnknown})
+	return added, removed, changed
+}
+
+// SetLoader sets how Reload obtains a new config (typically: re-read and
+// validate the config file exactly as at startup).
+func (m *Monitor) SetLoader(f func() (*Config, error)) {
+	m.mu.Lock()
+	m.loader = f
+	m.mu.Unlock()
+}
+
+// Reload re-reads the config through the loader and applies it between
+// rounds. An invalid config is rejected and the running one kept.
+func (m *Monitor) Reload() ReloadResult {
+	m.mu.Lock()
+	loader := m.loader
+	m.mu.Unlock()
+	res := ReloadResult{Time: m.now().UTC()}
+	if loader == nil {
+		res.Message = "reload is not available"
+		return m.recordReload(res)
 	}
-	return m
+	cfg, err := loader()
+	if err != nil {
+		res.Message = "config NOT reloaded, still running the previous one: " + err.Error()
+		m.log.Printf("reload rejected: %v", err)
+		return m.recordReload(res)
+	}
+	m.roundMu.Lock() // wait for a running round to finish
+	added, removed, changed := m.applyConfig(cfg)
+	m.roundMu.Unlock()
+	res.OK = true
+	res.Message = fmt.Sprintf("config reloaded: %d checks (%d added, %d removed, %d changed)", len(cfg.Checks), added, removed, changed)
+	m.log.Print(res.Message)
+	select {
+	case m.reloaded <- struct{}{}:
+	default:
+	}
+	return m.recordReload(res)
+}
+
+func (m *Monitor) recordReload(r ReloadResult) ReloadResult {
+	m.mu.Lock()
+	m.lastReload = &r
+	m.mu.Unlock()
+	return r
+}
+
+// config returns the current config.
+func (m *Monitor) config() *Config {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.cfg
 }
 
 // Run checks every interval until ctx ends. The first round starts
 // immediately.
 func (m *Monitor) Run(ctx context.Context) {
-	m.log.Printf("uptime-wisp: %d checks every %s, alerting via %s", len(m.cfg.Checks), m.cfg.Interval.Duration, m.channels())
-	t := time.NewTicker(m.cfg.Interval.Duration)
+	cfg := m.config()
+	m.log.Printf("uptime-wisp: %d checks every %s, alerting via %s", len(cfg.Checks), cfg.Interval.Duration, m.channels())
+	t := time.NewTicker(cfg.Interval.Duration)
 	defer t.Stop()
 	for {
 		m.Round(ctx)
@@ -94,6 +203,10 @@ func (m *Monitor) Run(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-t.C:
+		case <-m.reloaded:
+			// A reload: run a round now (so new checks show at once)
+			// and restart the ticker at the possibly new interval.
+			t.Reset(m.config().Interval.Duration)
 		}
 	}
 }
@@ -101,13 +214,16 @@ func (m *Monitor) Run(ctx context.Context) {
 // Probe runs every check concurrently and returns the results in
 // config order, without touching state or alerting.
 func (m *Monitor) Probe(ctx context.Context) []Result {
-	results := make([]Result, len(m.cfg.Checks))
+	m.mu.Lock()
+	checks, check := m.cfg.Checks, m.check
+	m.mu.Unlock()
+	results := make([]Result, len(checks))
 	var wg sync.WaitGroup
-	for i, c := range m.cfg.Checks {
+	for i, c := range checks {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			results[i] = m.check(ctx, c)
+			results[i] = check(ctx, c)
 		}()
 	}
 	wg.Wait()
@@ -115,8 +231,10 @@ func (m *Monitor) Probe(ctx context.Context) []Result {
 }
 
 // Round runs every check, applies the results, sends any alerts, and
-// pings the heartbeat.
+// pings the heartbeat. A reload waits for it to finish.
 func (m *Monitor) Round(ctx context.Context) {
+	m.roundMu.Lock()
+	defer m.roundMu.Unlock()
 	results := m.Probe(ctx)
 	if ctx.Err() != nil {
 		return
@@ -184,7 +302,10 @@ func (m *Monitor) apply(results []Result) []Alert {
 
 func (m *Monitor) send(ctx context.Context, a Alert) {
 	m.log.Printf("alert [%s] %s", a.Kind, a.Message)
-	for _, al := range m.alerters {
+	m.mu.Lock()
+	alerters := m.alerters
+	m.mu.Unlock()
+	for _, al := range alerters {
 		if err := deliver(ctx, al, a, m.backoff); err != nil {
 			m.log.Printf("alert via %s failed: %v", al, err)
 		}
@@ -194,8 +315,9 @@ func (m *Monitor) send(ctx context.Context, a Alert) {
 // SendTest sends a test alert through every channel and reports the
 // first failure, for `uptime-wisp -test-alert`.
 func (m *Monitor) SendTest(ctx context.Context) error {
+	cfg := m.config()
 	a := Alert{Kind: KindTest, Time: m.now().UTC(), Title: "uptime-wisp test alert",
-		Message: fmt.Sprintf("Test from uptime-wisp: %d checks configured. If you can read this, alerts work.", len(m.cfg.Checks))}
+		Message: fmt.Sprintf("Test from uptime-wisp: %d checks configured. If you can read this, alerts work.", len(cfg.Checks))}
 	for _, al := range m.alerters {
 		if err := deliver(ctx, al, a, nil); err != nil {
 			return fmt.Errorf("%s: %w", al, err)
@@ -205,14 +327,17 @@ func (m *Monitor) SendTest(ctx context.Context) error {
 }
 
 func (m *Monitor) heartbeat(ctx context.Context) {
-	if m.cfg.Heartbeat == nil {
+	m.mu.Lock()
+	hb, client := m.cfg.Heartbeat, m.hbClient
+	m.mu.Unlock()
+	if hb == nil {
 		return
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, m.cfg.Heartbeat.URL, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, hb.URL, nil)
 	if err != nil {
 		return
 	}
-	resp, err := m.hbClient.Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
 		m.log.Printf("heartbeat failed: %v", err)
 		return
@@ -236,6 +361,8 @@ func (m *Monitor) Snapshot() ([]State, time.Time) {
 }
 
 func (m *Monitor) channels() string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	s := ""
 	for i, a := range m.alerters {
 		if i > 0 {

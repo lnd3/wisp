@@ -3,9 +3,11 @@
 # cross-compiles the binary, syncs this directory and runs it as Compose
 # project "uptime-wisp" on whichever host you name.
 #
-# config.json (checks, alert channel, optional heartbeat) lives only on
-# the host: it holds the alert channel's secret (e.g. the ntfy topic), so
-# it's never synced or committed. Start from config.example.json.
+# config/config.json (checks, alert channel, login, optional heartbeat)
+# lives only on the host: it holds secrets (the ntfy topic, the login
+# hash), so it's never synced or committed. Start from
+# config.example.json. Edit it, then press "Reload config" on the status
+# page (or send SIGHUP); no restart needed.
 
 services:
   uptime-wisp:
@@ -18,7 +20,10 @@ services:
       # 127.0.0.1 behind a proxy on anything internet-facing.
       - "${UPTIME_BIND:-0.0.0.0}:${UPTIME_PORT:-8080}:8080"
     volumes:
-      - ./config.json:/etc/uptime-wisp/config.json:ro
+      # The directory, not the single file: many editors save by writing
+      # a new file and renaming it over the old one, which a single-file
+      # bind mount never sees, so a reload would keep the old config.
+      - ./config:/etc/uptime-wisp:ro
     # It only makes outbound requests and serves one page, so lock it down.
     read_only: true
     cap_drop: [ALL]

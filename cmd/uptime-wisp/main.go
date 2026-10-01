@@ -4,7 +4,7 @@
 // webhook) when a check goes down, comes back, or its TLS certificate
 // nears expiry. See package uptime and deploy/uptime/README.md.
 //
-//	uptime-wisp [-config /etc/uptime-wisp/config.json]   run
+//	uptime-wisp [-config /etc/uptime-wisp/config.json]   run (SIGHUP or the page's button reloads the config)
 //	uptime-wisp -once                                      one round, print results, no alerts (exit 1 if a check fails)
 //	uptime-wisp -test-alert                                send a test alert to every channel
 //	uptime-wisp -hash-password < password                 print auth.password_sha256
@@ -43,19 +43,28 @@ func main() {
 	if *hashPassword {
 		os.Exit(printHash())
 	}
-	cfg, err := uptime.Load(*cfgPath)
+	// load reads and validates the config exactly as the service runs it.
+	// Used at startup and for every reload, so a reload can never accept
+	// what a restart would reject.
+	load := func() (*uptime.Config, error) {
+		cfg, err := uptime.Load(*cfgPath)
+		if err != nil {
+			return nil, err
+		}
+		if *listen != "" {
+			cfg.Listen = *listen
+		}
+		// Never serve an open status page by accident.
+		if cfg.Listen != "" && cfg.Auth == nil && !*once && !*testAlert {
+			return nil, fmt.Errorf("config: the status page is enabled but \"auth\" is missing — add {\"user\":…, \"password_sha256\":…} (see -hash-password)")
+		}
+		return cfg, nil
+	}
+	cfg, err := load()
 	if err != nil {
 		// Exit 2, not 1: -once uses 1 for "a check failed", and deploy.sh
 		// must tell a bad config apart from a down site.
 		logger.Print(err)
-		os.Exit(2)
-	}
-	if *listen != "" {
-		cfg.Listen = *listen
-	}
-	// Never serve an open status page by accident.
-	if cfg.Listen != "" && cfg.Auth == nil && !*once && !*testAlert {
-		logger.Print("config: the status page is enabled but \"auth\" is missing — add {\"user\":…, \"password_sha256\":…} (see -hash-password)")
 		os.Exit(2)
 	}
 	if *checkConfig {
@@ -63,6 +72,13 @@ func main() {
 		return
 	}
 	m := uptime.New(cfg, uptime.Options{Log: logger})
+	m.SetLoader(func() (*uptime.Config, error) {
+		c, err := load()
+		if err == nil && c.Listen != cfg.Listen {
+			logger.Printf("reload: \"listen\" changed to %q; the status page keeps %q until a restart", c.Listen, cfg.Listen)
+		}
+		return c, err
+	})
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
@@ -76,6 +92,14 @@ func main() {
 	case *once:
 		os.Exit(printOnce(ctx, m))
 	default:
+		// SIGHUP reloads config.json, the same as the page's button.
+		hup := make(chan os.Signal, 1)
+		signal.Notify(hup, syscall.SIGHUP)
+		go func() {
+			for range hup {
+				m.Reload()
+			}
+		}()
 		if cfg.Listen != "" {
 			srv := &http.Server{Addr: cfg.Listen, Handler: m.Handler(), ReadHeaderTimeout: 5 * time.Second}
 			go func() {

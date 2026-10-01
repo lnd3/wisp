@@ -96,6 +96,7 @@ func scripted(t *testing.T, results ...Result) (*Monitor, *recorder, *time.Time)
 	rec := &recorder{}
 	m.alerters = []Alerter{rec}
 	m.backoff = nil
+	m.checkIsProber = false
 	i := 0
 	m.check = func(context.Context, CheckConfig) Result {
 		r := results[i]
@@ -404,5 +405,167 @@ func TestStatusPageRequiresAuth(t *testing.T) {
 	}
 	if resp := get("/healthz", "", ""); resp.StatusCode != 200 {
 		t.Errorf("/healthz must stay open for Docker's health check: %d", resp.StatusCode)
+	}
+}
+
+// ---- reload ----
+
+// byName returns a check function answering per check name, and a
+// monitor wired to it with a recorder for alerts.
+func reloadable(t *testing.T, checks string, results map[string]Result) (*Monitor, *recorder) {
+	t.Helper()
+	m := New(cfgWith(t, checks), Options{Log: log.New(io.Discard, "", 0)})
+	rec := &recorder{}
+	m.alerters = []Alerter{rec}
+	m.backoff = nil
+	m.checkIsProber = false
+	m.check = func(_ context.Context, c CheckConfig) Result { return results[c.Name] }
+	return m, rec
+}
+
+func stateOf(m *Monitor, name string) (State, bool) {
+	states, _ := m.Snapshot()
+	for _, s := range states {
+		if s.Name == name {
+			return s, true
+		}
+	}
+	return State{}, false
+}
+
+func TestReloadKeepsStateAndApplies(t *testing.T) {
+	results := map[string]Result{"a": fail, "b": ok, "c": ok, "d": ok}
+	m, rec := reloadable(t, `[{"name":"a","type":"http","url":"https://a.example/"},{"name":"b","type":"http","url":"https://b.example/"},{"name":"d","type":"http","url":"https://d.example/"}]`, results)
+	m.Round(context.Background())
+	m.Round(context.Background()) // "a" goes down
+	if rec.kinds() != "down" {
+		t.Fatalf("setup alerts = %q", rec.kinds())
+	}
+
+	next := cfgWith(t, `[{"name":"a","type":"http","url":"https://a.example/"},{"name":"c","type":"http","url":"https://c.example/"},{"name":"d","type":"http","url":"https://d-new.example/"}]`)
+	m.SetLoader(func() (*Config, error) { return next, nil })
+	r := m.Reload()
+	if !r.OK || r.Message != "config reloaded: 3 checks (1 added, 1 removed, 1 changed)" {
+		t.Fatalf("reload = %+v", r)
+	}
+	if a, _ := stateOf(m, "a"); a.Status != StatusDown || a.Failures != 2 {
+		t.Errorf("unchanged check must keep its state: %+v", a)
+	}
+	if _, ok := stateOf(m, "b"); ok {
+		t.Error("removed check still present")
+	}
+	if c, _ := stateOf(m, "c"); c.Status != StatusUnknown {
+		t.Errorf("new check = %+v", c)
+	}
+	if d, _ := stateOf(m, "d"); d.Status != StatusUnknown || d.Target != "https://d-new.example/" {
+		t.Errorf("changed target must reset: %+v", d)
+	}
+	m.Round(context.Background())
+	if rec.kinds() != "down" {
+		t.Errorf("a reload must not fire alerts by itself: %q", rec.kinds())
+	}
+	select {
+	case <-m.reloaded:
+	default:
+		t.Error("a reload must wake the run loop")
+	}
+}
+
+func TestReloadRejectsInvalid(t *testing.T) {
+	m, _ := reloadable(t, `[{"name":"a","type":"http","url":"https://a.example/"}]`, map[string]Result{"a": ok})
+	m.SetLoader(func() (*Config, error) { return nil, io.ErrUnexpectedEOF })
+	r := m.Reload()
+	if r.OK || !strings.Contains(r.Message, "NOT reloaded") {
+		t.Errorf("reload = %+v", r)
+	}
+	if _, ok := stateOf(m, "a"); !ok {
+		t.Error("the running config must stay after a rejected reload")
+	}
+}
+
+func TestReloadWaitsForRunningRound(t *testing.T) {
+	m, _ := reloadable(t, `[{"name":"a","type":"http","url":"https://a.example/"}]`, nil)
+	started, release := make(chan struct{}), make(chan struct{})
+	m.check = func(context.Context, CheckConfig) Result {
+		close(started)
+		<-release
+		return ok
+	}
+	go m.Round(context.Background())
+	<-started
+	next := cfgWith(t, `[{"name":"z","type":"http","url":"https://z.example/"}]`)
+	m.SetLoader(func() (*Config, error) { return next, nil })
+	done := make(chan ReloadResult)
+	go func() { done <- m.Reload() }()
+	select {
+	case <-done:
+		t.Fatal("reload completed while a round was running")
+	case <-time.After(100 * time.Millisecond):
+	}
+	close(release)
+	if r := <-done; !r.OK {
+		t.Errorf("reload after the round = %+v", r)
+	}
+	if _, ok := stateOf(m, "z"); !ok {
+		t.Error("reload not applied")
+	}
+}
+
+func TestReloadEndpoint(t *testing.T) {
+	m, _ := reloadable(t, `[{"name":"a","type":"http","url":"https://a.example/"}]`, map[string]Result{"a": ok, "b": ok})
+	m.cfg.Auth = &Auth{User: "wisp", PasswordSHA256: HashPassword("old password here")}
+	next := cfgWith(t, `[{"name":"a","type":"http","url":"https://a.example/"},{"name":"b","type":"http","url":"https://b.example/"}]`)
+	next.Auth = &Auth{User: "wisp", PasswordSHA256: HashPassword("new password here")}
+	m.SetLoader(func() (*Config, error) { return next, nil })
+	srv := httptest.NewServer(m.Handler())
+	defer srv.Close()
+	noRedirect := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	post := func(pass string, hdr map[string]string) int {
+		req, _ := http.NewRequest("POST", srv.URL+"/reload", nil)
+		req.SetBasicAuth("wisp", pass)
+		for k, v := range hdr {
+			req.Header.Set(k, v)
+		}
+		resp, err := noRedirect.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		return resp.StatusCode
+	}
+	if st := post("wrong", nil); st != 401 {
+		t.Errorf("unauthenticated reload = %d", st)
+	}
+	if st := post("old password here", map[string]string{"Sec-Fetch-Site": "cross-site"}); st != 403 {
+		t.Errorf("cross-site reload = %d", st)
+	}
+	if st := post("old password here", map[string]string{"Origin": "https://evil.example"}); st != 403 {
+		t.Errorf("foreign-origin reload = %d", st)
+	}
+	if _, ok := stateOf(m, "b"); ok {
+		t.Fatal("refused requests must not reload")
+	}
+	if st := post("old password here", map[string]string{"Sec-Fetch-Site": "same-origin"}); st != 303 {
+		t.Errorf("same-origin reload = %d, want 303", st)
+	}
+	if _, ok := stateOf(m, "b"); !ok {
+		t.Error("reload not applied")
+	}
+	get := func(pass string) (int, string) {
+		req, _ := http.NewRequest("GET", srv.URL+"/", nil)
+		req.SetBasicAuth("wisp", pass)
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		b, _ := io.ReadAll(resp.Body)
+		return resp.StatusCode, string(b)
+	}
+	if st, _ := get("old password here"); st != 401 {
+		t.Errorf("old password after a reload changed it = %d", st)
+	}
+	if st, body := get("new password here"); st != 200 || !strings.Contains(body, "config reloaded: 2 checks (1 added") || !strings.Contains(body, `action="/reload"`) {
+		t.Errorf("page after reload = %d, has message: %v", st, strings.Contains(body, "config reloaded"))
 	}
 }

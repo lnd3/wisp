@@ -43,8 +43,8 @@ deploy/uptime/deploy.sh rbserver1 /opt/uptime-wisp            # status page on :
 deploy/uptime/deploy.sh rbserver1 /opt/uptime-wisp --port=8090
 ```
 
-1. **First run:** it stops and asks you to create `config.json` on the
-   host from the shipped `config.example.json`. That file holds the
+1. **First run:** it stops and asks you to create `config/config.json`
+   on the host from the shipped `config.example.json`. That file holds the
    alert secret, such as the ntfy topic, so it's never synced or
    committed.
 2. **Every run:** it validates the host's config with the new binary,
@@ -54,6 +54,21 @@ deploy/uptime/deploy.sh rbserver1 /opt/uptime-wisp --port=8090
    and restarts.
 3. **Port and bind** are remembered on the host. A port that something
    else already uses is refused.
+
+**Changing checks (no deploy needed):** edit
+`/opt/uptime-wisp/config/config.json` on the host with any editor, then
+press **Reload config** on the status page. It's re-read and validated
+exactly as at startup.
+- **An invalid file is rejected,** the running config is kept, and the
+  error is shown on the page.
+- **Unchanged checks keep their state,** so a reload never sends
+  spurious alerts. New checks start "unknown" and are checked
+  immediately; removed ones disappear.
+- **Login and alert-channel changes** apply at once.
+- **Changing `listen`** needs a restart.
+
+From a shell, `docker compose -p uptime-wisp kill -s HUP uptime-wisp`
+does the same.
 
 **Prove alerts reach you** (do this once after setup):
 
@@ -72,8 +87,8 @@ printf %s "$PW" | sha256sum | cut -d' ' -f1   # → auth.password_sha256 (no tra
 ```
 
 (Or use `uptime-wisp -hash-password`, which reads the password from
-stdin and handles the newline.) Edit `config.json` **in place**, never
-by rewriting it from scratch, then re-run `deploy.sh`. Basic Auth over
+stdin and handles the newline.) Edit `config/config.json` (keep the rest of the file), then press
+**Reload config**. The old password stops working at once. Basic Auth over
 plain HTTP is fine on a home LAN, but the password crosses the network
 unencrypted, so don't expose this port to the internet.
 

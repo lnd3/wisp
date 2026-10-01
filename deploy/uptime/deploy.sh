@@ -6,8 +6,10 @@
 # tiny alpine image there. The host needs Docker (with the Compose v2
 # plugin), rsync, and the SSH user in the docker group; no Go toolchain.
 #
-# Re-running is safe and is the update path. The host's config.json
-# (checks + alert secrets) is never synced or overwritten.
+# Re-running is safe and is the update path. The host's config
+# (<remote-dir>/config/config.json: checks, alert secret, login) is never
+# synced or overwritten. Config edits don't need a deploy at all: press
+# "Reload config" on the status page.
 set -euo pipefail
 
 usage() {
@@ -23,8 +25,8 @@ Usage: $0 <ssh-target> [remote-dir] [--port=N] [--bind=ADDR]
 
 Port and bind are remembered on the host (in <remote-dir>/.env).
 
-First deploy: the host needs <remote-dir>/config.json. The script stops and
-tells you how to create it from config.example.json.
+First deploy: the host needs <remote-dir>/config/config.json. The script
+stops and tells you how to create it from config.example.json.
 
 Examples:
   $0 rbserver1 /opt/uptime-wisp
@@ -73,14 +75,18 @@ ssh "$TARGET" "mkdir -p '$REMOTE_DIR' && test -w '$REMOTE_DIR'" || {
 	echo "ERROR: can't create or write $REMOTE_DIR on $TARGET as the SSH user (for /opt: sudo mkdir -p $REMOTE_DIR && sudo chown \$USER: $REMOTE_DIR)." >&2
 	exit 1
 }
-if ! ssh "$TARGET" "test -f '$REMOTE_DIR/config.json'"; then
+# One-time migration from the old single-file layout (<remote-dir>/config.json)
+# to the mounted directory (<remote-dir>/config/config.json).
+ssh "$TARGET" "cd '$REMOTE_DIR' && if [ -f config.json ] && [ ! -e config/config.json ]; then mkdir -p config && chmod 700 config && mv config.json config/config.json && echo '    moved config.json -> config/config.json'; fi"
+if ! ssh "$TARGET" "test -f '$REMOTE_DIR/config/config.json'"; then
 	scp -q deploy/uptime/config.example.json "$TARGET:$REMOTE_DIR/config.example.json"
 	cat >&2 <<MSG
-ERROR: $TARGET:$REMOTE_DIR/config.json doesn't exist yet. It holds your checks
-and the alert channel's secret, so it's created on the host, never shipped:
+ERROR: $TARGET:$REMOTE_DIR/config/config.json doesn't exist yet. It holds your
+checks, the alert channel's secret and the status-page login, so it's created
+on the host, never shipped:
 
-  ssh $TARGET 'cp $REMOTE_DIR/config.example.json $REMOTE_DIR/config.json && chmod 600 $REMOTE_DIR/config.json'
-  ssh $TARGET 'nano $REMOTE_DIR/config.json'     # set your ntfy topic (or webhook), adjust checks
+  ssh $TARGET 'cd $REMOTE_DIR && mkdir -p config && chmod 700 config && cp config.example.json config/config.json && chmod 600 config/config.json'
+  ssh $TARGET 'nano $REMOTE_DIR/config/config.json'   # ntfy topic, login (uptime-wisp -hash-password), checks
 
 then re-run this script.
 MSG
@@ -123,13 +129,13 @@ echo "==> Validating the host's config.json with this build..."
 # applies), before replacing the running prober: a config the new
 # version rejects must not take monitoring down.
 scp -q "$STAGING/uptime-wisp" "$TARGET:$REMOTE_DIR/.uptime-wisp.check"
-if ! ssh "$TARGET" "cd '$REMOTE_DIR' && ./.uptime-wisp.check -config config.json -listen :8080 -check-config; rc=\$?; rm -f .uptime-wisp.check; exit \$rc"; then
-	echo "ERROR: config.json on $TARGET is invalid for this version (above). Nothing was changed." >&2
+if ! ssh "$TARGET" "cd '$REMOTE_DIR' && ./.uptime-wisp.check -config config/config.json -listen :8080 -check-config; rc=\$?; rm -f .uptime-wisp.check; exit \$rc"; then
+	echo "ERROR: config/config.json on $TARGET is invalid for this version (above). Nothing was changed." >&2
 	exit 1
 fi
 
 echo "==> Syncing (port $PORT, bind $BIND)..."
-rsync -az --exclude config.json "$STAGING/" "$TARGET:$REMOTE_DIR/"
+rsync -az --exclude config/ --exclude config.json "$STAGING/" "$TARGET:$REMOTE_DIR/"
 printf 'UPTIME_PORT=%s\nUPTIME_BIND=%s\n' "$PORT" "$BIND" | ssh "$TARGET" "cat > '$REMOTE_DIR/.env'"
 
 echo "==> Building the image and (re)starting..."
