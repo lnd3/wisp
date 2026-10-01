@@ -24,3 +24,4 @@ Format: `YYYY-MM-DD | ID | old_status → new_status | note`
 2026-10-01 | P001 | IN_PROGRESS → IN_PROGRESS | wisp counts its own landing page with its own hook (product wisp, internal/site); wisp-internal subnet pinned
 2026-10-01 | P001 | IN_PROGRESS → IN_PROGRESS | Self-integration live; registry overwrite incident (cinderapps entry wiped ~4 min, restored) → merge-only ops.sh register
 2026-10-01 | P001 | IN_PROGRESS → IN_PROGRESS | Dashboard gains Today-so-far (keyless live staging summary + ingest status) and Issues (in-memory event log, 24h error banner); product notes now use ops.sh register
+2026-10-01 | D002 | PLANNING → PLANNING | Open question resolved by user: product restart mid-day → accept double count; salt stays process-only (no tmpfs persistence)

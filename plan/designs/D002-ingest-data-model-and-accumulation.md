@@ -496,11 +496,14 @@ N/A. Greenfield.
   products. Shared allows portfolio-wide uniques, but the products
   must exchange a salt wisp never sees. Also: a product running
   several replicas needs them to share one salt.
-- **Restart mid-day:**
-  - Accept the over-count, which is the default.
-  - Or keep the salt in RAM outside the process (e.g. tmpfs),
-    surviving restarts but not reboots. This relaxes "salt never
-    leaves the process" slightly.
+- ~~**Restart mid-day**~~ **Resolved 2026-10-01: accept the
+  over-count.** When a product process restarts, it gets a fresh salt,
+  and a visitor returning later that day is counted again. The user's
+  call: "If a user revisits after a restart, I think they deserve to be
+  counted twice." The salt never leaves the process, not even into
+  tmpfs. This is the one place the count can err upward. It's bounded
+  by how often a product restarts, and accepted as the price of the
+  stronger salt property.
 - **Grace length (2h?), flush interval (5 min?), histogram buckets,
   batch limits:** all proposed values.
 - **Country/GeoIP:** still open from D001. If added, it's
@@ -519,6 +522,9 @@ N/A. Greenfield.
 - Thesis: [[T001]]
 
 ## Log
+
+2026-10-01 (later) — Restart mid-day resolved by the user: accept
+the double count; the salt stays process-only. See Open Questions.
 
 2026-09-30 (later) — **§4–§5 implemented**: `internal/stats` (schema
 exactly as §5; `daily_page`'s count column is named `hits`, since it
