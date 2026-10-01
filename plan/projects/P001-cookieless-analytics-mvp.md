@@ -68,7 +68,11 @@ full technical design.
     - A heartbeat receiver on `bh2` (e.g. in wisp) watches
       `rbserver1`.
 
-    Each side covers the other's outage. **Open dependency:** the alert
+    Each side covers the other's outage. Probes always target each
+    product's real public URL (e.g. `https://offgridapp.mera.network/`),
+    never localhost or a LAN address, even for offgrid on the same Pi.
+    That keeps the DNS-resolution requirement real (user-confirmed via
+    superplan). **Open dependency:** the alert
     delivery path. Push notifications must not route through something
     hosted on `bh2` (or on `rbserver1` alone), or that machine's outage
     silences its own alert. Still undecided: ownership (wisp vs. a
