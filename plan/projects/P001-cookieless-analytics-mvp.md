@@ -57,10 +57,22 @@ full technical design.
     push its own "I'm down". It must run from a vantage point *not*
     co-located with what it checks. **Consequence:** wisp itself runs on
     `bh2` with the products, so the prober can't live in wisp's
-    deployment, whichever repo owns the code. Still undecided: whether
-    this belongs in `wisp` at all or in a separate project, and where
-    the prober runs (a separate VPS? the user's always-on machine?).
-    No design or build before those are decided.
+    deployment, whichever repo owns the code.
+    **Placement candidate (user, 2026-10-01): `rbserver1`**, the
+    always-on Pi. It's external for everything on `bh2`, but
+    co-located with `offgrid`. Mitigation, as cinder's vigil (T008)
+    does: a dead-man's switch, where a receiver *not* on `rbserver1`
+    alerts on the prober's silence as well as on reported failures.
+    Candidate shape (not decided):
+    - The prober on `rbserver1` checks the `bh2` products.
+    - A heartbeat receiver on `bh2` (e.g. in wisp) watches
+      `rbserver1`.
+
+    Each side covers the other's outage. **Open dependency:** the alert
+    delivery path. Push notifications must not route through something
+    hosted on `bh2` (or on `rbserver1` alone), or that machine's outage
+    silences its own alert. Still undecided: ownership (wisp vs. a
+    separate project) and the alert channel. No design or build yet.
 
 ## Linked
 
@@ -301,4 +313,12 @@ uptime, including DNS resolution, rather than products self-reporting.
 Added the consequence for this repo: wisp is co-located on bh2, so it
 can't host the prober. Ownership and placement remain open. Not a
 build request.
+
+2026-10-01 (later) — Second superplan steering note
+(`wisp-todo-20261001T190053Z`): the user names `rbserver1`, the Pi
+offgrid also runs on, as the prober's placement candidate. The
+offgrid blind spot gets a dead-man's-switch mitigation (alert on
+silence, receiver not on `rbserver1`). Added here: the symmetric
+`rbserver1`-probes / `bh2`-receives candidate, and the alert-delivery
+path as the remaining shared dependency. Still not a build request.
 

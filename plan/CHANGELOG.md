@@ -28,3 +28,4 @@ Format: `YYYY-MM-DD | ID | old_status → new_status | note`
 2026-10-01 | D002 | PLANNING → PLANNING | User decisions: per-product salts; IP+UA only as key inputs (other headers reviewed and rejected). D001's implemented questions marked resolved
 2026-10-01 | D001 | PLANNING → PLANNING | Histogram charts explained in plain language (question titles, what-a-bar-counts, axis caption, takeaway) after user feedback
 2026-10-01 | P001 | IN_PROGRESS → IN_PROGRESS | Health-monitoring scope item: shape set to external active prober incl. DNS (user, via superplan steering note); can't be hosted on bh2/wisp; ownership + placement still open
+2026-10-01 | P001 | IN_PROGRESS → IN_PROGRESS | Health monitoring: placement candidate rbserver1 (user); dead-man's-switch for offgrid co-location; open: alert delivery path must not depend on bh2/rbserver1 alone
