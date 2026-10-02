@@ -155,8 +155,10 @@ full technical design.
 - [x] Deployed on `rbserver1` at `/opt/uptime-wisp` (2026-10-01):
       14 checks, all up; alerts to ntfy topic `lnd_bh2_alerts_84af2f`
       (test alert confirmed delivered); status page `rbserver1.lan:8080`
-- [ ] Optional: `heartbeat` to a third-party dead-man service (closes
-      offgrid's co-location blind spot on `rbserver1`)
+- [x] ~~Optional: `heartbeat` to a third-party dead-man service~~
+      **Deferred 2026-10-02 (user):** "I'm still checking it personally,
+      so there's really no need." uptime-wisp already supports it
+      (`heartbeat.url`); revisit if manual checking stops
 
 ### Phase 3 — Storage, rollups, dashboard
 - [x] Day close + product statistics DB (D002 §4–5): `internal/stats`,
@@ -575,4 +577,9 @@ on rbserver1 (15 checks, alerting to ntfy). Done this session:
   stale toolchain image removed)
 
 Next is in FOCUS.md.
+
+2026-10-02 — uptime-wisp heartbeat deferred by the user: they check
+the status page personally, which covers the rbserver1-dies blind spot
+for now. The feature exists (`heartbeat.url` in config.json) if that
+changes.
 

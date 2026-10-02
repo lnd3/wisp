@@ -27,6 +27,9 @@
 - Nothing blocking. The products' own deploy changes (image shipping)
   live in their repos and depend on their sessions.
 
+- **Deferred:** the uptime-wisp heartbeat (the user checks the status
+  page personally). `heartbeat.url` is ready if that changes.
+
 ---
 
 ## Next
@@ -35,14 +38,11 @@
    risk reducer): cinder A024, EphemNet A007, persona A011,
    offgrid A013. Until cinder's lands, its next server-side build
    re-pulls the 1.27 GB `golang:1.24-bookworm`.
-2. **uptime-wisp heartbeat** (optional): a third-party dead-man ping
-   (e.g. healthchecks.io) covers the case where rbserver1 dies,
-   including offgrid's co-location blind spot.
-3. **Make the Issues log survive restarts?** It's in memory and resets
+2. **Make the Issues log survive restarts?** It's in memory and resets
    on every deploy, so problems from before a deploy disappear. It
    could persist to the stats DB; it holds no personal data.
-4. **D002 leftovers:** confirm the proposed numbers (5-min flush,
+3. **D002 leftovers:** confirm the proposed numbers (5-min flush,
    histogram buckets, batch limits) and decide on country/GeoIP
    (recommendation: leave it out).
-5. **bh2 housekeeping (user's call):** cinder's stale `deploy-*` and
+4. **bh2 housekeeping (user's call):** cinder's stale `deploy-*` and
    `dev-*` images, ~200 MB.

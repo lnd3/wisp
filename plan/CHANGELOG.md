@@ -44,3 +44,4 @@ Format: `YYYY-MM-DD | ID | old_status → new_status | note`
 2026-10-02 | P001 | IN_PROGRESS → IN_PROGRESS | wisp deploy ships a locally built image (docker save|load); server never builds; rollback via kept wisp:<commit> images
 2026-10-02 | P001 | IN_PROGRESS → IN_PROGRESS | Image-shipping deploy pattern filed in cinder A024, EphemNet A007, persona A011, offgrid A013; bh2 disk growth traced to cinder's golang:1.24-bookworm (1.27GB)
 2026-10-02 | P001 | IN_PROGRESS → IN_PROGRESS | Session wrap: five products live, first closed day in; uptime-wisp live; image-shipping deploys; bh2 at 62%. Ticked done: build-vs-adopt, hash inputs, product wiring, bot filtering
+2026-10-02 | P001 | IN_PROGRESS → IN_PROGRESS | uptime-wisp heartbeat deferred (user checks the status page personally)
