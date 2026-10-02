@@ -588,3 +588,36 @@ deploys (filed in their repos), persisting the Issues log, and the
 D002 leftovers. bh2 housekeeping found cinder's stale
 `deploy-*`/`dev-*` images already gone; bh2 at 60% (3.5 GB free).
 
+
+2026-10-02 — **Machine health: health-wisp + uptime-wisp `host`
+check.** User: "We have a monitor on bh2, but we don't know any stats
+in wisp. Does it make sense to collect machine health?" Then, on a
+health endpoint served by wisp: "When we have more than one machine,
+this is not a viable solution… We could add health-wisp?" The user
+decided: token auth, subdomain `bh2.health.wisp.mera.network` (they
+added the EphemNet zones entry themselves).
+- **Not part of the analytics model:** keys, salts and day close have
+  nothing to do with host metrics. wisp's server doesn't serve them.
+- **health-wisp** (`cmd/health-wisp`, package `health`):
+  - **Image:** FROM scratch, 5.8 MB, one per machine.
+  - **Report:** disk % (current, rounded up like df), memory %, and
+    15-minute load per CPU (the kernel's own slow average, to 0.05),
+    sampled every 30s and served from cache.
+  - **Access:** bearer token, of which the host keeps only the
+    SHA-256. One global rate limit applied before auth. No client
+    address is looked at or logged.
+  - **Modes:** TLS mode (a Caddy sidecar behind the shared nginx,
+    ports 9230/9490, 172.27.21.0/24) or LAN mode (a plain port).
+- **uptime-wisp `host` check:** `max_disk_pct` / `max_mem_pct` /
+  `max_load_per_cpu` (defaults 90/95/2.0), one row per machine. Alerts
+  go through the usual path.
+- **Live:**
+  - **bh2:** `/opt/health-wisp`, Let's Encrypt certificate, 401
+    without the token. Numbers match `df`/`free`/`loadavg`.
+  - **uptime-wisp on rbserver1:** redeployed. The "bh2 host" check was
+    added (disk ≤85%, mem ≤90%) and is up: disk 60%, mem 77%.
+  - **rbserver1's own health-wisp:** waits on
+    `sudo mkdir /opt/health-wisp` (sudo there needs the user's
+    password).
+- **Also:** cinder was told its `monitor.sh` fails on every run
+  (`.env: line 35`), which likely explains the missing alert at 99%.
