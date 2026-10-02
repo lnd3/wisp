@@ -7,38 +7,42 @@
 
 ## Active
 
-- **P001 Phase 0: deploy `wisp.mera.network`.** The tooling is in
-  `deploy/`, adapted from persona/EphemNet/cinder, with ports and
-  subnet checked live on `bh2`. It serves a placeholder page until an
-  ingest API exists.
-- **wisp is live and counting**: cinderapps (cinder's A022, done from
-  cinder's side) and wisp's own landing page report into staging. The
-  first day (2026-10-01) closes on the 16-min-grace deploy, 2026-10-02.
-  Products register with `deploy/ops.sh … register <key>` (merge-only).
-- **D001's revision to backend-only ingest.** Products' servers send
-  unique events or (preferably) aggregates. No browser ever talks to
-  wisp.
+- **wisp is live and counting** at https://wisp.mera.network (bh2).
+  - **Reporting:** five products (cinderapps, offgridapp, eph-network,
+    persona, wisp). The first closed day is 2026-10-01 (86 visitors).
+  - **Dashboard views:** Issues · Last day so far (default) · Last day ·
+    Last 3/7/30/90 days.
+  - **Days close** 16 minutes after midnight UTC.
+  - **Deploys** build the image locally and ship it with
+    `docker save | docker load`; bh2 never builds.
+- **uptime-wisp is live** on rbserver1
+  (`http://rbserver1.lan:8080`, Basic Auth): 15 checks, alerts to
+  ntfy `lnd_bh2_alerts_84af2f`. Edit
+  `/opt/uptime-wisp/config/config.json`, then press "Reload config".
 
 ---
 
 ## Blocked
 
-- **D002 open questions (not blocking deploy).** The wire format is
-  implemented. Still open, because they touch CLAUDE.md's invariants:
-  key fields beyond IP+UA, salt scope (per-product vs shared), and
-  behaviour on a mid-day restart.
+- Nothing blocking. The products' own deploy changes (image shipping)
+  live in their repos and depend on their sessions.
 
 ---
 
 ## Next
 
-1. After 2026-10-02 02:10 UTC: check that the dashboard History shows
-   cinderapps, offgridapp and wisp for 2026-10-01, plus the close log
-   lines.
-2. Uptime monitoring: uptime-wisp is live on `rbserver1:8080`, alerting
-   to ntfy. Optional next: a third-party heartbeat (dead-man) for
-   offgrid's co-location blind spot. EphemNet's `ephemnet-site` split
-   (`009df85`) may unblock its A006 wisp integration.
-3. EphemNet/persona integrations once they have Go handlers.
-4. D002 remaining: confirm the proposed numeric values; country/GeoIP
-   undecided.
+1. **The products switch to image-shipping deploys** (the biggest bh2
+   risk reducer): cinder A024, EphemNet A007, persona A011,
+   offgrid A013. Until cinder's lands, its next server-side build
+   re-pulls the 1.27 GB `golang:1.24-bookworm`.
+2. **uptime-wisp heartbeat** (optional): a third-party dead-man ping
+   (e.g. healthchecks.io) covers the case where rbserver1 dies,
+   including offgrid's co-location blind spot.
+3. **Make the Issues log survive restarts?** It's in memory and resets
+   on every deploy, so problems from before a deploy disappear. It
+   could persist to the stats DB; it holds no personal data.
+4. **D002 leftovers:** confirm the proposed numbers (5-min flush,
+   histogram buckets, batch limits) and decide on country/GeoIP
+   (recommendation: leave it out).
+5. **bh2 housekeeping (user's call):** cinder's stale `deploy-*` and
+   `dev-*` images, ~200 MB.

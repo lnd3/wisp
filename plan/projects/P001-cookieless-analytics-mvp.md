@@ -109,13 +109,13 @@ full technical design.
       restart once DNS existed; full external checklist passed
 
 ### Phase 1 — Design decisions
-- [ ] Decide build-vs-adopt for real (see D001's Open Questions) —
+- [x] Decide build-vs-adopt for real: **built** (hook, ingest, stats, dashboard live since 2026-10-01) —
       confirm a from-scratch build is actually wanted over configuring
       an existing cookieless tool (GoatCounter, Plausible/Umami in
       no-cookie mode)
 - [x] Decide where the visitor hash runs: product-side; batches carry
       per-key daily distributions; wisp deletes keys at day close (D001)
-- [ ] Pin down exact hash inputs (which browser fields beyond IP+UA,
+- [x] Pin down exact hash inputs: decided 2026-10-01 — IP + User-Agent only, per-product salts (which browser fields beyond IP+UA,
       if any) and salt scope (per-product vs. shared)
 - [ ] Confirm D002's proposed wire format, day close (grace decided
       2026-10-02: 16 min),
@@ -131,7 +131,7 @@ full technical design.
       rsync; `internal/registry`, `wisp hash-token`)
 - [x] `hook` package (D002 §1b): `Start`/`View`/`Download`/`Close`
       and the interval dispatcher. Stdlib-only Go (`hook/`).
-- [ ] Wire the hook into products, in the user's order (2026-10-01):
+- [x] Wire the hook into products — **all five report as of 2026-10-02** (cinderapps, offgridapp, eph-network, persona, wisp; first closed day 2026-10-01: 86 visitors). Original order (2026-10-01):
       1. `cinder:A022`, cinderapps.org (Go landing server, ready)
          + `offgrid:A012`, offgridapp.mera.network (`cmd/landing`,
          ready; its Caddyfile needs `X-Real-IP` added)
@@ -141,7 +141,7 @@ full technical design.
          web-facing Go service)
 - [x] wisp counts its own landing page with its own hook (product
       `wisp`): `internal/site`, served by `wisp serve`
-- [ ] Bot/crawler filtering (likely product-side now, before aggregation)
+- [x] Bot/crawler filtering: product-side in the hook (`isBot`, before keying), as planned
 
 ### Phase 4 — External uptime monitoring (own prober, decided 2026-10-01)
 - [x] ~~uptime-kuma~~ deployed, then removed (867 MB image; user: "not
@@ -559,4 +559,20 @@ The journal went from 478 MB to 93 MB, and the disk from 80% to 75%.
 or build used it. bh2 is now at 62% (3.4 GB free), from 80% this
 morning. cinder's next server-side build would re-pull it until A024
 lands.
+
+2026-10-02 — **Session wrap.** Live and healthy: wisp.mera.network
+(five products reporting; first closed day 2026-10-01) and uptime-wisp
+on rbserver1 (15 checks, alerting to ntfy). Done this session:
+- the hook, ingest, day close, stats DB and dashboard
+- dashboard views reworked (Issues · Last day so far · Last day ·
+  3/7/30/90 days)
+- 16-minute day-close grace
+- uptime-wisp built and deployed, replacing uptime-kuma, with Basic
+  Auth and config reload
+- image-shipping deploys for wisp, with the pattern filed in all four
+  products
+- the bh2 disk incident traced and fixed: 80% → 62% (journal capped,
+  stale toolchain image removed)
+
+Next is in FOCUS.md.
 
