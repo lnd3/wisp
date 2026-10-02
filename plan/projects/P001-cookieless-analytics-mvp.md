@@ -635,3 +635,18 @@ added the EphemNet zones entry themselves).
   Docker, stock nginx, no shared stream skeleton. Until bh3 gets a
   health-wisp and its token, uptime-wisp rejects reloads, and the
   running config stays the earlier one.
+
+2026-10-02 — **health-wisp on bh3; all three machines monitored.**
+- **bh3's nginx:** bh3 (158.174.210.184, Docker installed by the user)
+  got the same shared nginx stream skeleton as bh2. That meant
+  `libnginx-mod-stream`, the `stream-enabled` include line, and
+  cinder's own `deploy/configure-shared-nginx.sh bh3`, run unmodified.
+  Its `default` backend (127.0.0.1:18443) has nothing behind it on
+  bh3 yet.
+- **health-wisp on bh3:** deployed in TLS mode at
+  `host-bh3-4637.mera.network`, with a Let's Encrypt certificate and
+  401 without the token.
+- **The "bh3 host" check:** the token was filled into the entry the
+  user had added.
+- **Status:** uptime-wisp reloaded (20 checks). bh2 host, bh3 host and
+  rbserver1 host are all up.
