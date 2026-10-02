@@ -29,6 +29,8 @@
 
     { "name": "solemn.network",      "type": "http", "url": "https://solemn.network/" },
 
-    { "name": "offgridapp",          "type": "http", "url": "https://offgridapp.mera.network/" }
+    { "name": "offgridapp",          "type": "http", "url": "https://offgridapp.mera.network/" },
+
+    { "name": "bh2 host",            "type": "host", "url": "https://bh2.health.wisp.mera.network/", "token": "<bh2:/opt/health-wisp/.health-token>", "max_disk_pct": 85, "max_mem_pct": 90 }
   ]
 }

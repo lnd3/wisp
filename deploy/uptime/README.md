@@ -16,6 +16,9 @@ Every interval (default 60s), from outside the machines it watches:
   certificate expires.
 - **DNS checks.** Ask a specific nameserver for a host's A/AAAA records
   and compare with `expect`.
+- **Host checks.** GET a machine's health-wisp report (with its
+  token) and hold disk, memory and load against limits. One row per
+  machine. See `deploy/health/README.md`.
 - **Alerts only on change:**
   - DOWN after `failures_before_alert` (2) failures in a row
   - "back up", with how long it was down
@@ -111,7 +114,7 @@ URL. Fields:
 | `heartbeat.url` | — | optional dead-man's-switch ping |
 | `auth` | required with the status page | `{"user":…, "password_sha256":…}` |
 | `alerts[]` | required | `{"type":"ntfy"\|"webhook","url":…,"token":…}` |
-| `checks[]` | required | `http`: `url`, `expect_status`; `dns`: `host`, `server`, `record_type` (A/AAAA), `expect` |
+| `checks[]` | required | `http`: `url`, `expect_status`; `dns`: `host`, `server`, `record_type` (A/AAAA), `expect`; `host`: `url`, `token`, `max_disk_pct` (90), `max_mem_pct` (95), `max_load_per_cpu` (2.0) |
 
 Unknown keys are rejected, so a typo fails loudly instead of being
 silently ignored.

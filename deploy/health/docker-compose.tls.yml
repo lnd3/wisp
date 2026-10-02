@@ -1,0 +1,35 @@
+# TLS overlay for an internet-facing host behind cinder's shared nginx
+# (bh2): health-caddy terminates TLS for HEALTH_DOMAIN and proxies to
+# health-wisp, which then has no host port and no outbound route at all.
+#
+# Ports and subnet checked live on bh2 (2026-10-02): wisp holds
+# 9220/9480 and 172.27.1.0/24 + 172.27.11.0/24; health-wisp takes
+# 9230/9490 and 172.27.21.0/24.
+services:
+  health-caddy:
+    image: caddy:2 # already on bh2 for wisp-caddy, so no extra disk
+    environment:
+      - HEALTH_DOMAIN=${HEALTH_DOMAIN:?set HEALTH_DOMAIN in .env}
+      - HEALTH_EDGE_SUBNET=${HEALTH_EDGE_SUBNET:-172.27.21.0/24}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - health-caddy-data:/data
+      - health-caddy-config:/config
+    ports:
+      - "127.0.0.1:${HEALTH_CADDY_HTTPS_PORT:-9490}:443"
+      - "127.0.0.1:${HEALTH_CADDY_HTTP_PORT:-9230}:80" # ACME HTTP-01
+    networks: [health-edge, health]
+    mem_limit: 64m
+    restart: unless-stopped
+
+networks:
+  health:
+    internal: true
+  health-edge:
+    ipam:
+      config:
+        - subnet: ${HEALTH_EDGE_SUBNET:-172.27.21.0/24}
+
+volumes:
+  health-caddy-data:
+  health-caddy-config:

@@ -49,6 +49,8 @@ func TestParseDefaultsAndValidation(t *testing.T) {
 		"dns no server":   `{"alerts":[{"type":"ntfy","url":"https://ntfy.sh/t"}],"checks":[{"name":"a","type":"dns","host":"x"}]}`,
 		"dns bad expect":  `{"alerts":[{"type":"ntfy","url":"https://ntfy.sh/t"}],"checks":[{"name":"a","type":"dns","host":"x","server":"1.1.1.1","expect":["nope"]}]}`,
 		"typo key":        `{"intervall":"60s","alerts":[{"type":"ntfy","url":"https://ntfy.sh/t"}],"checks":[{"name":"a","type":"http","url":"https://a/"}]}`,
+		"host no token":   `{"alerts":[{"type":"ntfy","url":"https://ntfy.sh/t"}],"checks":[{"name":"a","type":"host","url":"https://a/"}]}`,
+		"host bad limit":  `{"alerts":[{"type":"ntfy","url":"https://ntfy.sh/t"}],"checks":[{"name":"a","type":"host","url":"https://a/","token":"t","max_disk_pct":101}]}`,
 		"timeout too big": `{"interval":"10s","timeout":"10s","alerts":[{"type":"ntfy","url":"https://ntfy.sh/t"}],"checks":[{"name":"a","type":"http","url":"https://a/"}]}`,
 	} {
 		if _, err := Parse([]byte(js)); err == nil {
@@ -242,6 +244,52 @@ func TestHTTPCheck(t *testing.T) {
 	untrusted := newProber(cfg, nil)
 	if r := untrusted.run(context.Background(), CheckConfig{Type: "http", URL: srv.URL + "/", ExpectStatus: []int{200}}); r.OK || !strings.HasPrefix(r.Detail, "tls: certificate not valid") {
 		t.Errorf("untrusted cert = %+v", r)
+	}
+}
+
+func TestHostCheck(t *testing.T) {
+	report := `{"host":"bh2","disk_pct":{"root":61,"data":12},"mem_pct":44,"load_per_cpu":0.2,"sampled":"2026-10-02T12:00:00Z"}`
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "Bearer tok" {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		if r.URL.Path == "/garbage" {
+			w.Write([]byte("<html>"))
+			return
+		}
+		w.Write([]byte(report))
+	}))
+	defer srv.Close()
+	roots := x509.NewCertPool()
+	roots.AddCert(srv.Certificate())
+	cfg := cfgWith(t, `[{"name":"bh2","type":"host","url":"https://h.example/","token":"tok"}]`)
+	ck := cfg.Checks[0]
+	if ck.MaxDiskPct != 90 || ck.MaxMemPct != 95 || ck.MaxLoadPerCPU != 2 {
+		t.Fatalf("host defaults = %+v", ck)
+	}
+	p := newProber(cfg, roots)
+	run := func(mod func(*CheckConfig)) Result {
+		c := ck
+		c.URL = srv.URL + "/"
+		if mod != nil {
+			mod(&c)
+		}
+		return p.run(context.Background(), c)
+	}
+	r := run(nil)
+	if !r.OK || r.Detail != "disk data 12% · disk root 61% · mem 44% · load 0.20/cpu" || r.CertExpiry.IsZero() {
+		t.Errorf("healthy = %+v", r)
+	}
+	r = run(func(c *CheckConfig) { c.MaxDiskPct = 60; c.MaxLoadPerCPU = 0.1 })
+	if r.OK || !strings.HasPrefix(r.Detail, "disk root 61% > 60%, load 0.20/cpu > 0.10 — disk data 12%") {
+		t.Errorf("over limits = %+v", r)
+	}
+	if r = run(func(c *CheckConfig) { c.Token = "nope" }); r.OK || r.Detail != "status 401 (want 200): wrong token" {
+		t.Errorf("wrong token = %+v", r)
+	}
+	if r = run(func(c *CheckConfig) { c.URL = srv.URL + "/garbage" }); r.OK || !strings.HasPrefix(r.Detail, "not a health-wisp report") {
+		t.Errorf("garbage = %+v", r)
 	}
 }
 

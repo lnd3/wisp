@@ -1,0 +1,7 @@
+# LAN overlay: publish health-wisp on a host port. Fine on a home LAN
+# (the token still guards the report); never on an internet-facing host
+# — use docker-compose.tls.yml there.
+services:
+  health-wisp:
+    ports:
+      - "${HEALTH_BIND:-0.0.0.0}:${HEALTH_PORT:-8081}:8080"

@@ -1,0 +1,37 @@
+# health-caddy: TLS for HEALTH_DOMAIN, the same shape as wisp-caddy
+# (cinder's D007 pattern: PROXY protocol from the shared nginx stream
+# passthrough, HTTP-01 ACME). Its only caller is uptime-wisp, but a stray
+# visitor would still carry an IP, so the same logging lockdown as
+# wisp-caddy applies: no access log, and the loggers that embed the
+# request are dropped. ACME/TLS lifecycle logs are kept.
+{
+	auto_https disable_redirects
+
+	log default {
+		output stderr
+		exclude http.log.error http.handlers.reverse_proxy
+	}
+
+	servers :443 {
+		listener_wrappers {
+			proxy_protocol {
+				timeout 2s
+				allow {$HEALTH_EDGE_SUBNET}
+			}
+			tls
+		}
+	}
+}
+
+{$HEALTH_DOMAIN} {
+	tls {
+		issuer acme {
+			disable_tlsalpn_challenge
+		}
+	}
+	reverse_proxy health-wisp:8080
+}
+
+http://{$HEALTH_DOMAIN} {
+	redir https://{host}{uri} permanent
+}

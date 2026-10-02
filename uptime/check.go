@@ -4,8 +4,11 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"maps"
 	"net"
 	"net/http"
 	"net/netip"
@@ -13,6 +16,8 @@ import (
 	"slices"
 	"strings"
 	"time"
+
+	"github.com/lnd3/wisp/health"
 )
 
 // Result is one check's outcome.
@@ -73,8 +78,11 @@ func resolverAt(server string, via *net.Resolver) *net.Resolver {
 func (p *prober) run(ctx context.Context, c CheckConfig) Result {
 	ctx, cancel := context.WithTimeout(ctx, p.timeout)
 	defer cancel()
-	if c.Type == "dns" {
+	switch c.Type {
+	case "dns":
 		return p.dns(ctx, c)
+	case "host":
+		return p.host(ctx, c)
 	}
 	return p.http(ctx, c)
 }
@@ -101,6 +109,64 @@ func (p *prober) http(ctx context.Context, c CheckConfig) Result {
 	} else {
 		r.Detail = fmt.Sprintf("status %d (want %s)", resp.StatusCode, joinInts(c.ExpectStatus))
 	}
+	return r
+}
+
+// host fetches a health-wisp report and holds it against the check's
+// limits. The detail always shows the numbers, so the status page reads
+// as a small machine overview; a breach is listed first.
+func (p *prober) host(ctx context.Context, c CheckConfig) Result {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.URL, nil)
+	if err != nil {
+		return Result{Detail: err.Error()}
+	}
+	req.Header.Set("User-Agent", "uptime-wisp/1 (+https://wisp.mera.network)")
+	req.Header.Set("Authorization", "Bearer "+c.Token)
+	start := time.Now()
+	resp, err := p.client.Do(req)
+	lat := time.Since(start)
+	if err != nil {
+		return Result{Detail: describe(err), Latency: lat}
+	}
+	defer resp.Body.Close()
+	r := Result{Latency: lat}
+	if resp.TLS != nil && len(resp.TLS.PeerCertificates) > 0 {
+		r.CertExpiry = resp.TLS.PeerCertificates[0].NotAfter
+	}
+	if resp.StatusCode != http.StatusOK {
+		r.Detail = fmt.Sprintf("status %d (want 200)", resp.StatusCode)
+		if resp.StatusCode == http.StatusUnauthorized {
+			r.Detail += ": wrong token"
+		}
+		return r
+	}
+	var rep health.Report
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 64<<10)).Decode(&rep); err != nil {
+		r.Detail = "not a health-wisp report: " + err.Error()
+		return r
+	}
+	var over, parts []string
+	names := slices.Sorted(maps.Keys(rep.DiskPct))
+	for _, n := range names {
+		pct := rep.DiskPct[n]
+		parts = append(parts, fmt.Sprintf("disk %s %d%%", n, pct))
+		if pct > c.MaxDiskPct {
+			over = append(over, fmt.Sprintf("disk %s %d%% > %d%%", n, pct, c.MaxDiskPct))
+		}
+	}
+	parts = append(parts, fmt.Sprintf("mem %d%%", rep.MemPct), fmt.Sprintf("load %.2f/cpu", rep.LoadPerCPU))
+	if rep.MemPct > c.MaxMemPct {
+		over = append(over, fmt.Sprintf("mem %d%% > %d%%", rep.MemPct, c.MaxMemPct))
+	}
+	if rep.LoadPerCPU > c.MaxLoadPerCPU {
+		over = append(over, fmt.Sprintf("load %.2f/cpu > %.2f", rep.LoadPerCPU, c.MaxLoadPerCPU))
+	}
+	r.Detail = strings.Join(parts, " · ")
+	if len(over) > 0 {
+		r.Detail = strings.Join(over, ", ") + " — " + r.Detail
+		return r
+	}
+	r.OK = true
 	return r
 }
 

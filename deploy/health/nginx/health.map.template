@@ -1,0 +1,4 @@
+# health-wisp's nginx stream-backend entry (cinder's multi-repo
+# convention: this file holds only health-wisp's own hostname). Rendered
+# and installed by deploy/health/deploy.sh in TLS mode.
+${HEALTH_DOMAIN}   127.0.0.1:${HEALTH_CADDY_HTTPS_PORT};  # health-caddy

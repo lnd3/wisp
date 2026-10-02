@@ -29,6 +29,11 @@ const (
 	DefaultFailuresBeforeAlert = 2
 	DefaultCertWarnDays        = 14
 	DefaultResolver            = "1.1.1.1:53"
+
+	// host checks' thresholds
+	DefaultMaxDiskPct    = 90
+	DefaultMaxMemPct     = 95
+	DefaultMaxLoadPerCPU = 2.0
 )
 
 // Duration is a time.Duration that unmarshals from "60s"-style strings.
@@ -88,7 +93,7 @@ type AlertConfig struct {
 // CheckConfig is one thing to probe.
 type CheckConfig struct {
 	Name string `json:"name"`
-	Type string `json:"type"` // "http" | "dns"
+	Type string `json:"type"` // "http" | "dns" | "host"
 
 	// http: GET URL; up when the first response's status is in
 	// ExpectStatus (default [200]). Redirects are not followed — a 301 is
@@ -103,6 +108,15 @@ type CheckConfig struct {
 	Server     string   `json:"server,omitempty"`
 	RecordType string   `json:"record_type,omitempty"`
 	Expect     []string `json:"expect,omitempty"`
+
+	// host: GET URL — a health-wisp report — with "Authorization: Bearer
+	// <Token>"; up when it answers 200 and every disk, memory and load
+	// is within its limit. URL is shared with http; the limits default
+	// to 90%, 95% and 2.0 (15-minute load average per CPU).
+	Token         string  `json:"token,omitempty"`
+	MaxDiskPct    int     `json:"max_disk_pct,omitempty"`
+	MaxMemPct     int     `json:"max_mem_pct,omitempty"`
+	MaxLoadPerCPU float64 `json:"max_load_per_cpu,omitempty"`
 }
 
 // Target is a one-line description for logs and the status page.
@@ -220,8 +234,27 @@ func Parse(b []byte) (*Config, error) {
 					errs = append(errs, fmt.Errorf("check %q: expect %q is not an IP address", ck.Name, e))
 				}
 			}
+		case "host":
+			if !httpURL(ck.URL) {
+				errs = append(errs, fmt.Errorf("check %q: url must be an http(s) URL", ck.Name))
+			}
+			if ck.Token == "" {
+				errs = append(errs, fmt.Errorf("check %q: host needs the health-wisp token", ck.Name))
+			}
+			if ck.MaxDiskPct == 0 {
+				ck.MaxDiskPct = DefaultMaxDiskPct
+			}
+			if ck.MaxMemPct == 0 {
+				ck.MaxMemPct = DefaultMaxMemPct
+			}
+			if ck.MaxLoadPerCPU == 0 {
+				ck.MaxLoadPerCPU = DefaultMaxLoadPerCPU
+			}
+			if ck.MaxDiskPct < 1 || ck.MaxDiskPct > 100 || ck.MaxMemPct < 1 || ck.MaxMemPct > 100 || ck.MaxLoadPerCPU < 0 {
+				errs = append(errs, fmt.Errorf("check %q: max_disk_pct and max_mem_pct must be 1-100, max_load_per_cpu positive", ck.Name))
+			}
 		default:
-			errs = append(errs, fmt.Errorf("check %q: type must be \"http\" or \"dns\"", ck.Name))
+			errs = append(errs, fmt.Errorf("check %q: type must be \"http\", \"dns\" or \"host\"", ck.Name))
 		}
 	}
 	if err := errors.Join(errs...); err != nil {
