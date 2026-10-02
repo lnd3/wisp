@@ -43,7 +43,7 @@ host's root disk. Neither the host's `/` nor its `/proc` is mounted.
 ```bash
 # internet-facing, behind cinder's shared nginx (TLS by a Caddy sidecar):
 deploy/health/deploy.sh bh2 /opt/health-wisp --host=bh2 --domain=host-bh2-4637.mera.network
-# LAN box (plain port 8081):
+# LAN box (plain port; default 8081):
 deploy/health/deploy.sh rbserver1 /opt/health-wisp --host=rbserver1 --port=8082   # 8081 is taken there
 ```
 
