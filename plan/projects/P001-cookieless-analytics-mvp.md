@@ -523,3 +523,14 @@ compiling modernc.org/sqlite), which needs ~2 GB of temporary space.
   rbserver1, the "uptime-wisp process" and the container are the same
   process (parent: containerd-shim).
 
+2026-10-02 (later) — **wisp deploys ship a locally built image** (user:
+"build snapshots in all products, and just copy the docker image").
+- **Build:** a pinned `golang:1.24` multi-stage build runs on the dev
+  machine, cross-compiling natively via `$BUILDPLATFORM`/`$TARGETARCH`.
+- **Ship:** `docker save | gzip | ssh | docker load` (14.7 MB image,
+  6.3 MB transfer). The server only tags `wisp:<commit>` as
+  `wisp:current` and runs `up -d`, keeping the two previous images for
+  rollback.
+- **Result:** no build step on the server at all, and the toolchain is
+  pinned again. This supersedes the earlier binary-shipping step.
+

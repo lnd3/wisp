@@ -64,9 +64,11 @@ services:
   # never end users' browsers (plan/concepts/C001), so the peer address
   # it sees is a product server's, not a visitor's — and it logs none.
   wisp:
-    build:
-      context: ..
-      dockerfile: deploy/wisp/Dockerfile
+    # Built on the dev machine and shipped by deploy.sh (docker save |
+    # ssh | docker load); never built here. deploy.sh tags each deploy
+    # wisp:<commit> and points wisp:current at it, keeping the previous
+    # images for rollback.
+    image: wisp:current
     command:
       - "serve"
       - "-addr=:8080"
