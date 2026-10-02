@@ -38,3 +38,4 @@ Format: `YYYY-MM-DD | ID | old_status → new_status | note`
 2026-10-01 | P001 | IN_PROGRESS → IN_PROGRESS | uptime-wisp deployed on rbserver1:/opt/uptime-wisp; 14 checks up; ntfy test alert confirmed; EphemNet fixed the ns1 NXDOMAIN finding
 2026-10-01 | P001 | IN_PROGRESS → IN_PROGRESS | uptime-wisp status page behind required Basic Auth (sha256 password); -check-config pre-flight
 2026-10-01 | P001 | IN_PROGRESS → IN_PROGRESS | uptime-wisp: Reload config button + SIGHUP (validated, state-preserving, between rounds); config moved to mounted config/ dir
+2026-10-02 | P001 | IN_PROGRESS → IN_PROGRESS | Dashboard: single row of views (Issues, Last day so far, Last day, Last 3/7/30/90 days), products below; History tab removed

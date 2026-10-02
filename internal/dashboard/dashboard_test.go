@@ -51,7 +51,7 @@ func day(product, date string, uniques int, pages ...stats.Page) *stats.Day {
 }
 
 func TestEmpty(t *testing.T) {
-	st, h, body := get(t, server(t), "/dashboard/")
+	st, h, body := get(t, server(t), "/dashboard/?view=history&days=30")
 	if st != 200 || !strings.Contains(body, "No closed days yet") {
 		t.Fatalf("got %d: %s", st, body)
 	}
@@ -91,7 +91,7 @@ func TestRendersWithHonestWording(t *testing.T) {
 func TestEscapesProductData(t *testing.T) {
 	evil := `/<script>alert(1)</script>`
 	srv := server(t, day("cindernote", "2026-10-01", 3, stats.Page{Kind: "view", PageKey: evil, Hits: 3, Uniques: 3}))
-	_, _, body := get(t, srv, "/dashboard/")
+	_, _, body := get(t, srv, "/dashboard/?view=history&days=30")
 	if strings.Contains(body, "<script>alert") {
 		t.Fatal("a page key reached the HTML unescaped")
 	}
@@ -200,5 +200,54 @@ func TestHistogramExplains(t *testing.T) {
 	}
 	if empty := histogram("views", nil, true); empty.Takeaway != "" {
 		t.Errorf("no data must give no takeaway, got %q", empty.Takeaway)
+	}
+}
+
+func TestViewTabs(t *testing.T) {
+	srv := server(t, day("cindernote", "2026-10-01", 30, stats.Page{Kind: "view", PageKey: "/", Hits: 40, Uniques: 30}),
+		day("cindernote", "2026-09-30", 10))
+	_, _, body := get(t, srv, "/dashboard/")
+	// One row of views, in this order; the old History/range rows are gone.
+	order := []string{">Issues", ">Last day so far<", ">Last day<", ">Last 3 days<", ">Last 7 days<", ">Last 30 days<", ">Last 90 days<"}
+	at := -1
+	for _, label := range order {
+		i := strings.Index(body, label)
+		if i < 0 || i < at {
+			t.Fatalf("tab %q missing or out of order", label)
+		}
+		at = i
+	}
+	if strings.Contains(body, ">History<") || strings.Contains(body, `aria-label="Date range"`) {
+		t.Error("the History tab and range row should be gone")
+	}
+	// The product list sits below the tabs.
+	if strings.Index(body, `aria-label="Product"`) < strings.Index(body, ">Last 90 days<") {
+		t.Error("product list must come after the view tabs")
+	}
+	// The default view is the live one.
+	if !strings.Contains(body, `aria-current="page">Last day so far<`) {
+		t.Error("default view should be Last day so far")
+	}
+}
+
+func TestLastDayView(t *testing.T) {
+	srv := server(t, day("cindernote", "2026-10-01", 30, stats.Page{Kind: "view", PageKey: "/", Hits: 40, Uniques: 30}),
+		day("cindernote", "2026-09-30", 10))
+	_, _, body := get(t, srv, "/dashboard/?view=history&days=1")
+	if !strings.Contains(body, "2026-10-01 (UTC), the last closed day") {
+		t.Error("last day view should name the single closed day")
+	}
+	if strings.Contains(body, `class="line-chart"`) {
+		t.Error("a single day has no trend lines")
+	}
+	if !strings.Contains(body, `<div class="tile-label">Visitors</div>`) || strings.Contains(strings.ToLower(body), "visitor-days") {
+		t.Error("one day's distinct visitors are 'Visitors', not visitor-days")
+	}
+	if strings.Contains(body, "visitor-days ·") {
+		t.Error("bar tooltips for one day should say visitors")
+	}
+	// Old-style links keep working: a bare ?days=N means that range.
+	if _, _, old := get(t, srv, "/dashboard/?days=7"); !strings.Contains(old, `aria-current="page">Last 7 days<`) {
+		t.Error("?days=7 should open Last 7 days")
 	}
 }

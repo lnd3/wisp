@@ -23,6 +23,7 @@ import (
 	"net/url"
 	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/lnd3/wisp/internal/events"
@@ -37,7 +38,7 @@ var staticFS embed.FS
 
 // Ranges are the offered date ranges, in days, ending at the latest
 // closed day.
-var Ranges = []int{7, 30, 90}
+var Ranges = []int{1, 3, 7, 30, 90}
 
 const (
 	defaultRange = 30
@@ -49,7 +50,7 @@ const (
 type Handler struct {
 	Stats *stats.DB
 	Log   *log.Logger // internal failures only
-	// Optional, for the "Today so far" and "Issues" tabs:
+	// Optional, for the "Last day so far" and "Issues" views:
 	Today      TodaySource     // today's open staging, summarized keylessly
 	Events     *events.Log     // issue log + per-product ingest status
 	Registered func() []string // registered product keys
@@ -104,7 +105,7 @@ func (h *Handler) render(w http.ResponseWriter, r *http.Request) {
 	}
 	// The selector offers every product with closed days, open staging
 	// today, or a registration — so a newly wired product shows up on
-	// "Today so far" before its first day closes.
+	// "Last day so far" before its first day closes.
 	var registered []string
 	if h.Registered != nil {
 		registered = h.Registered()
@@ -130,9 +131,14 @@ func (h *Handler) render(w http.ResponseWriter, r *http.Request) {
 	if d, err := strconv.Atoi(r.URL.Query().Get("days")); err == nil && slices.Contains(Ranges, d) {
 		days = d
 	}
+	// The live view is the default. A bare ?days=N (older links) still
+	// means that closed-day range.
 	viewName := r.URL.Query().Get("view")
 	if !slices.Contains(Views, viewName) {
-		viewName = "history"
+		viewName = "today"
+		if r.URL.Query().Has("days") {
+			viewName = "history"
+		}
 	}
 
 	v, err := h.build(ctx, all, product, days, viewName)
@@ -188,7 +194,6 @@ type view struct {
 	Issues       []issueRow
 	IssuesSince  string
 	Products     []link
-	Ranges       []link
 	ProductLabel string
 	HasData      bool
 	From, To     string
@@ -214,33 +219,33 @@ func (h *Handler) build(ctx context.Context, products []string, product string, 
 		v.ProductLabel = product
 	}
 	hrefView := func(p string, d int, vn string) string {
-		q := url.Values{"days": {strconv.Itoa(d)}}
+		q := url.Values{"view": {vn}}
+		if vn == "history" {
+			q.Set("days", strconv.Itoa(d))
+		}
 		if p != "" {
 			q.Set("product", p)
-		}
-		if vn != "history" {
-			q.Set("view", vn)
 		}
 		return "/dashboard/?" + q.Encode()
 	}
 	href := func(p string, d int) string { return hrefView(p, d, viewName) }
-	for _, t := range []struct{ name, label string }{{"history", "History"}, {"today", "Today so far"}, {"issues", "Issues"}} {
-		v.Tabs = append(v.Tabs, link{t.label, hrefView(product, days, t.name), t.name == viewName})
-	}
-	if viewName != "history" {
-		// Only the history tab reads closed days; skip its queries.
-		v.Products = append(v.Products, link{"All products", href("", days), product == ""})
-		for _, p := range products {
-			v.Products = append(v.Products, link{p, href(p, days), p == product})
+	// One row of views: issues, the live day, then closed-day ranges.
+	v.Tabs = append(v.Tabs,
+		link{"Issues", hrefView(product, days, "issues"), viewName == "issues"},
+		link{"Last day so far", hrefView(product, days, "today"), viewName == "today"})
+	for _, d := range Ranges {
+		label := fmt.Sprintf("Last %d days", d)
+		if d == 1 {
+			label = "Last day"
 		}
-		return v, nil
+		v.Tabs = append(v.Tabs, link{label, hrefView(product, d, "history"), viewName == "history" && d == days})
 	}
 	v.Products = append(v.Products, link{"All products", href("", days), product == ""})
 	for _, p := range products {
 		v.Products = append(v.Products, link{p, href(p, days), p == product})
 	}
-	for _, d := range Ranges {
-		v.Ranges = append(v.Ranges, link{fmt.Sprintf("Last %d days", d), href(product, d), d == days})
+	if viewName != "history" {
+		return v, nil // only the closed-day views query the stats DB
 	}
 
 	latest, err := h.Stats.LatestDay(ctx, product)
@@ -280,13 +285,25 @@ func (h *Handler) build(ctx context.Context, products []string, product string, 
 	if sum.Uniques > 0 {
 		bounceRate = fmt.Sprintf("%.0f%%", 100*float64(sum.Bounces)/float64(sum.Uniques))
 	}
-	v.Tiles = []tile{
+	visitorTiles := []tile{
 		{"Visitors per day", compact(sum.Uniques / len(dates)), "average; a deliberate lower bound"},
 		{"Visitor-days", compact(sum.Uniques), "daily visitors summed — not unique people"},
+	}
+	if days == 1 {
+		// One closed day: distinct visitors is an honest count, not a sum.
+		visitorTiles = []tile{{"Visitors", compact(sum.Uniques), "distinct that day; a deliberate lower bound"}}
+		if product == "" && len(products) > 1 {
+			visitorTiles[0].Note = "summed across products — not unique people"
+		}
+	}
+	v.Tiles = append(visitorTiles, []tile{
 		{"Views", compact(sum.Views), ""},
 		{"Visits", compact(sum.Visits), "a new visit after 30 min idle"},
 		{"Downloads", compact(sum.Downloads), ""},
 		{"Single-view visitors", bounceRate, "share of visitor-days with one view"},
+	}...)
+	if days == 1 {
+		v.Tiles[len(v.Tiles)-1].Note = "share of that day's visitors with one view"
 	}
 	v.Visitors = newLineChart("Visitors per day", "Distinct visitors each day — a deliberate lower bound", dates, visitors)
 	v.Views = newLineChart("Views per day", "", dates, views)
@@ -320,7 +337,11 @@ func (h *Handler) build(ctx context.Context, products []string, product string, 
 		if err != nil {
 			return nil, err
 		}
-		*q.dst = newBarList(q.title, q.sub, q.countLbl, items, q.countLbl != "visitor-days")
+		b := newBarList(q.title, q.sub, q.countLbl, items, q.countLbl != "visitor-days")
+		if days == 1 {
+			b = singleDay(b)
+		}
+		*q.dst = b
 	}
 
 	for _, q := range []struct {
@@ -339,4 +360,14 @@ func (h *Handler) build(ctx context.Context, products []string, product string, 
 		*q.dst = histogram(q.metric, items, days > 1)
 	}
 	return v, nil
+}
+
+// singleDay relabels a bar list for one closed day, where distinct
+// visitors are an honest count rather than a sum over days.
+func singleDay(b barList) barList {
+	r := strings.NewReplacer("visitor-days", "visitors", "Visitor-days", "Visitors")
+	b.Subtitle = r.Replace(b.Subtitle)
+	b.CountLabel = r.Replace(b.CountLabel)
+	b.UniqueUnit = "visitors"
+	return b
 }

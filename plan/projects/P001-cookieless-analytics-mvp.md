@@ -491,3 +491,13 @@ it: 15 checks, all up. The live reload POST returns 303 with "0 added,
 sits in `/opt/uptime-wisp/config/` (directory mount; migrated by
 deploy.sh).
 
+2026-10-02 — **Dashboard navigation reworked** (user): the History
+tab and its range row are gone. There's now one row of views (Issues ·
+Last day so far · Last day · Last 3/7/30/90 days) with the product
+list in its own row below. The live view is the default; old
+`?days=N` links still open that range.
+- **Last day** (one closed day) drops the trend charts and uses true
+  "visitors" wording throughout. A test forbids "visitor-days" on that
+  page.
+- Rendered on desktop and mobile.
+

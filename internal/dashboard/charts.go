@@ -175,7 +175,7 @@ type columnChart struct {
 }
 
 // histogramCopy is the wording for each per-visitor histogram, kept in
-// one place so the History and Today tabs explain them identically.
+// one place so every view explains them identically.
 var histogramCopy = map[string]struct{ title, what, axis, one, many string }{
 	"pages": {
 		"How many different pages did people open?",

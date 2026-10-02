@@ -14,19 +14,14 @@
   <nav class="seg tabs" aria-label="View">
     {{range .Tabs}}<a href="{{.URL}}"{{if .Selected}} aria-current="page"{{end}}>{{.Label}}{{if eq .Label "Issues"}}{{if or $.Errors $.Warnings}} ({{if $.Errors}}{{$.Errors}} error{{if ne $.Errors 1}}s{{end}}{{if $.Warnings}}, {{end}}{{end}}{{if $.Warnings}}{{$.Warnings}} warning{{if ne $.Warnings 1}}s{{end}}{{end}}){{end}}{{end}}</a>{{end}}
   </nav>
-  {{if ne .View "issues"}}
-  <nav class="filters" aria-label="Filters">
-    <div class="seg" role="group" aria-label="Product">
-      {{range .Products}}<a href="{{.URL}}"{{if .Selected}} aria-current="page"{{end}}>{{.Label}}</a>{{end}}
-    </div>
-    {{if eq .View "history"}}
-    <div class="seg" role="group" aria-label="Date range">
-      {{range .Ranges}}<a href="{{.URL}}"{{if .Selected}} aria-current="page"{{end}}>{{.Label}}</a>{{end}}
-    </div>
-    {{end}}
-  </nav>
-  {{end}}
 </header>
+{{if ne .View "issues"}}
+<nav class="products" aria-label="Product">
+  <div class="seg">
+    {{range .Products}}<a href="{{.URL}}"{{if .Selected}} aria-current="page"{{end}}>{{.Label}}</a>{{end}}
+  </div>
+</nav>
+{{end}}
 
 <main>
 {{if and .Errors (ne .View "issues")}}
@@ -37,15 +32,21 @@
 {{if not .HasData}}
   <section class="empty">
     <h2>No closed days yet</h2>
-    <p>A day's statistics appear here once it closes, 26 hours after it starts (the day plus a 2-hour grace for late batches). Until then, see <em>Today so far</em>.</p>
+    <p>A day's statistics appear here once it closes, 26 hours after it starts (the day plus a 2-hour grace for late batches). Until then, see <em>Last day so far</em>.</p>
   </section>
 {{else}}
+  {{if eq .Days 1}}
+  <p class="scope">{{.ProductLabel}} · {{.To}} (UTC), the last closed day. Visitors are a deliberate lower bound.</p>
+  {{else}}
   <p class="scope">{{.ProductLabel}} · {{.From}} to {{.To}} (UTC, closed days only). Visitors are a deliberate lower bound. Figures summed over several days are <strong>visitor-days</strong>, not unique people: the same person on two days counts twice, by design.</p>
+  {{end}}
 
   {{template "tiles" .Tiles}}
 
+  {{if gt .Days 1}}
   {{template "line" .Visitors}}
   {{template "line" .Views}}
+  {{end}}
 
   <details class="table-view">
     <summary>Daily table</summary>
@@ -77,7 +78,7 @@
 {{end}}
 
 {{if eq .View "today"}}{{with .Today}}
-  <p class="scope">{{$.ProductLabel}} · {{.Date}} (UTC), so far. Live counts from the day's open data, aggregated on the fly. They move to <em>History</em> when the day closes at 02:00 UTC tomorrow.{{range .OpenEarlier}} {{.}} is still open too and closes shortly.{{end}}</p>
+  <p class="scope">{{$.ProductLabel}} · {{.Date}} (UTC), so far. Live counts from the day's open data, aggregated on the fly. They become <em>Last day</em> when the day closes at 02:00 UTC tomorrow.{{range .OpenEarlier}} {{.}} is still open too and closes shortly.{{end}}</p>
   {{if .HasData}}
   {{template "tiles" .Tiles}}
   <div class="grid">

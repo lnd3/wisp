@@ -65,7 +65,7 @@ func TestTodayTab(t *testing.T) {
 	})
 
 	_, _, body := get(t, srv, "/dashboard/?view=today&product=cinderapps")
-	for _, want := range []string{"Today so far", "2026-10-01 (UTC), so far", "Visitors today", "/cindertunnel", "lobste.rs",
+	for _, want := range []string{"Last day so far", "2026-10-01 (UTC), so far", "Visitors today", "/cindertunnel", "lobste.rs",
 		"2026-09-30 is still open", "Ingest status", "cinderapps", "offgridapp", "none since start", "10 min ago"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("today tab lacks %q", want)
@@ -139,9 +139,9 @@ func TestIssuesTabAndBanner(t *testing.T) {
 	}
 }
 
-func TestUnknownViewFallsBackToHistory(t *testing.T) {
+func TestUnknownViewFallsBackToLive(t *testing.T) {
 	srv := liveServer(t, time.Now(), events.New(nil), nil)
-	if st, _, b := get(t, srv, "/dashboard/?view=bogus"); st != 200 || !strings.Contains(b, "No closed days yet") {
+	if st, _, b := get(t, srv, "/dashboard/?view=bogus"); st != 200 || !strings.Contains(b, "Nothing received yet today") {
 		t.Errorf("got %d", st)
 	}
 }
