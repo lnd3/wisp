@@ -554,3 +554,9 @@ removed.
 drop-in `/etc/systemd/journald.conf.d/size.conf` (`SystemMaxUse=100M`).
 The journal went from 478 MB to 93 MB, and the disk from 80% to 75%.
 
+2026-10-02 (later) — Removed cinder's unused `golang:1.24-bookworm`
+(1.27 GB) from bh2 at the user's request, after checking no container
+or build used it. bh2 is now at 62% (3.4 GB free), from 80% this
+morning. cinder's next server-side build would re-pull it until A024
+lands.
+
