@@ -138,7 +138,7 @@ rsync -az --delete \
 	--exclude 'deploy/products.json' \
 	"$STAGING"/ "${DEPLOY_SSH_TARGET}:${DEPLOY_REMOTE_PATH}/"
 
-echo "==> Building and starting on the server..."
+echo "==> Starting on the server (load, tag, up)..."
 # shellcheck disable=SC2029  # DEPLOY_REMOTE_PATH is ours to expand locally, not the remote's
 ssh "$DEPLOY_SSH_TARGET" bash -s <<EOF
 set -euo pipefail

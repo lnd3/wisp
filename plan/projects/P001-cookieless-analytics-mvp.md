@@ -534,3 +534,19 @@ compiling modernc.org/sqlite), which needs ~2 GB of temporary space.
 - **Result:** no build step on the server at all, and the toolchain is
   pinned again. This supersedes the earlier binary-shipping step.
 
+2026-10-02 (later) — **The image-shipping pattern shared with every
+product** (user: "All deploy scripts should be doing this. Share with
+offgrid, cinder, ephemnet, persona."): cinder A024 (`54cf6f0`),
+EphemNet A007 (`d31c926`), persona A011 (`5390f79`), offgrid A013
+(`40595e0`). Each was committed path-scoped (just the Action and its
+CHANGELOG line), leaving those sessions' in-progress work untouched.
+
+**Where bh2's disk went** (64% → 80% in a day, asked by the user):
+`golang:1.24-bookworm`, 1.27 GB, pulled 2026-10-01 20:03 UTC by
+cinder's server-side build. It's tagged, so neither the dangling-image
+prune nor the build-cache prune removes it. Also unused: cinder's old
+`deploy-*` (~110 MB) and stopped `dev-*` (~95 MB) images, and a 478 MB
+systemd journal. Removal of the cinder images is left to the user;
+the toolchain image is listed in cinder A024. wisp's own old image was
+removed.
+

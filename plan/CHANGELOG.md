@@ -42,3 +42,4 @@ Format: `YYYY-MM-DD | ID | old_status → new_status | note`
 2026-10-02 | D002 | PLANNING → PLANNING | Day-close grace 2h → 16 min (user); hook.DayCloseAfter = 24h16m
 2026-10-02 | P001 | IN_PROGRESS → IN_PROGRESS | bh2 disk filled by wisp's on-server Go build (killed, recovered); deploy now cross-compiles locally, runtime-only image, prune-on-failure, free-space guard
 2026-10-02 | P001 | IN_PROGRESS → IN_PROGRESS | wisp deploy ships a locally built image (docker save|load); server never builds; rollback via kept wisp:<commit> images
+2026-10-02 | P001 | IN_PROGRESS → IN_PROGRESS | Image-shipping deploy pattern filed in cinder A024, EphemNet A007, persona A011, offgrid A013; bh2 disk growth traced to cinder's golang:1.24-bookworm (1.27GB)
