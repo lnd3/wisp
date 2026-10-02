@@ -34,15 +34,13 @@
 
 ## Next
 
-1. **The products switch to image-shipping deploys** (the biggest bh2
-   risk reducer): cinder A024, EphemNet A007, persona A011,
-   offgrid A013. Until cinder's lands, its next server-side build
-   re-pulls the 1.27 GB `golang:1.24-bookworm`.
-2. **Make the Issues log survive restarts?** It's in memory and resets
-   on every deploy, so problems from before a deploy disappear. It
-   could persist to the stats DB; it holds no personal data.
-3. **D002 leftovers:** confirm the proposed numbers (5-min flush,
-   histogram buckets, batch limits) and decide on country/GeoIP
-   (recommendation: leave it out).
-4. **bh2 housekeeping (user's call):** cinder's stale `deploy-*` and
-   `dev-*` images, ~200 MB.
+Nothing scheduled. Deferred by the user (2026-10-02):
+- **Image-shipping deploys in the other products** (cinder A024,
+  EphemNet A007, persona A011, offgrid A013). Filed; each repo picks it
+  up when it's ready. Until cinder's lands, its next server-side build
+  re-pulls the 1.27 GB `golang:1.24-bookworm`.
+- **Persisting the Issues log** across restarts.
+- **D002 leftovers:** confirm the proposed numbers; country/GeoIP.
+
+Done: bh2 housekeeping. cinder's stale `deploy-*`/`dev-*` images had
+already been removed by the time we checked; bh2 is at 60%.

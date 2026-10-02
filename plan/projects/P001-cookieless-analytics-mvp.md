@@ -583,3 +583,8 @@ the status page personally, which covers the rbserver1-dies blind spot
 for now. The feature exists (`heartbeat.url` in config.json) if that
 changes.
 
+2026-10-02 — Deferred by the user: the products' image-shipping
+deploys (filed in their repos), persisting the Issues log, and the
+D002 leftovers. bh2 housekeeping found cinder's stale
+`deploy-*`/`dev-*` images already gone; bh2 at 60% (3.5 GB free).
+
