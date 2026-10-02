@@ -30,7 +30,7 @@ Usage: $0 <ssh-target> <remote-dir> [--host=NAME] [--domain=FQDN] [--port=N] [--
   --bind=ADDR    LAN mode: address to publish on (default 0.0.0.0)
 
 Examples:
-  $0 bh2 /opt/health-wisp --host=bh2 --domain=bh2.health.wisp.mera.network
+  $0 bh2 /opt/health-wisp --host=bh2 --domain=host-bh2-4637.mera.network
   $0 rbserver1 /opt/health-wisp --host=rbserver1
 USAGE
 	exit 1

@@ -42,9 +42,9 @@ host's root disk. Neither the host's `/` nor its `/proc` is mounted.
 
 ```bash
 # internet-facing, behind cinder's shared nginx (TLS by a Caddy sidecar):
-deploy/health/deploy.sh bh2 /opt/health-wisp --host=bh2 --domain=bh2.health.wisp.mera.network
+deploy/health/deploy.sh bh2 /opt/health-wisp --host=bh2 --domain=host-bh2-4637.mera.network
 # LAN box (plain port 8081):
-deploy/health/deploy.sh rbserver1 /opt/health-wisp --host=rbserver1
+deploy/health/deploy.sh rbserver1 /opt/health-wisp --host=rbserver1 --port=8082   # 8081 is taken there
 ```
 
 - **Build:** the image is built on the dev machine and shipped
@@ -73,7 +73,7 @@ deploy/health/deploy.sh rbserver1 /opt/health-wisp --host=rbserver1
 
 ```json
 {"name": "bh2 host", "type": "host",
- "url": "https://bh2.health.wisp.mera.network/",
+ "url": "https://host-bh2-4637.mera.network/",
  "token": "<contents of bh2:/opt/health-wisp/.health-token>",
  "max_disk_pct": 85, "max_mem_pct": 90, "max_load_per_cpu": 2}
 ```

@@ -621,3 +621,17 @@ added the EphemNet zones entry themselves).
     password).
 - **Also:** cinder was told its `monitor.sh` fails on every run
   (`.env: line 35`), which likely explains the missing alert at 99%.
+
+2026-10-02 — health-wisp follow-up:
+- **rbserver1:** deployed in LAN mode on port 8082 (8081 is taken by a
+  non-Docker service there).
+- **bh2's name:** the user renamed it to `host-bh2-4637.mera.network`
+  (`bh2.health.wisp.mera.network` no longer resolves). health-wisp on
+  bh2 was redeployed under the new name, with the same token.
+- **Checks:** the "bh2 host" and "rbserver1 host" checks both pass
+  from inside the uptime-wisp container.
+- **bh3** (158.174.210.184, `host-bh3-4637.mera.network`): the user
+  added a "bh3 host" check without a token. bh3 is a fresh VM: no
+  Docker, stock nginx, no shared stream skeleton. Until bh3 gets a
+  health-wisp and its token, uptime-wisp rejects reloads, and the
+  running config stays the earlier one.
