@@ -105,6 +105,21 @@ export WISP_BUILD_INFO="build ${GIT_REV} · ${BUILD_TIME}"
 BUILD_INFO_VARS='${WISP_BUILD_INFO}'
 envsubst "$BUILD_INFO_VARS" <"$STAGING/site/index.html" >"$STAGING/site/index.html.tmp" && mv "$STAGING/site/index.html.tmp" "$STAGING/site/index.html"
 
+# Build the server binary here, from the packaged snapshot, never on the
+# server: compiling there (Go toolchain image, module download, SQLite
+# driver) needed ~2 GB of temporary space and filled bh2's disk on
+# 2026-10-02. The image built remotely only copies this file in.
+case "$(ssh "$DEPLOY_SSH_TARGET" uname -m)" in
+x86_64 | amd64) GOARCH=amd64 ;;
+aarch64 | arm64) GOARCH=arm64 ;;
+*)
+	echo "ERROR: unsupported server architecture" >&2
+	exit 1
+	;;
+esac
+echo "==> Building wisp for linux/$GOARCH..."
+(cd "$STAGING" && CGO_ENABLED=0 GOOS=linux GOARCH=$GOARCH go build -trimpath -ldflags="-s -w" -o deploy/wisp/wisp ./cmd/wisp)
+
 echo "==> Syncing to ${DEPLOY_SSH_TARGET}:${DEPLOY_REMOTE_PATH} ..."
 # --delete keeps the remote folder an exact mirror of this commit — but
 # deploy/.env (real domain) and deploy/products.json (the product
@@ -129,13 +144,19 @@ if [ ! -f deploy/products.json ]; then
 	echo "ERROR: deploy/products.json is missing on the server — see deploy/README.md's product registry setup." >&2
 	exit 1
 fi
+# Refuse to start on a nearly full disk: bh2 is shared by every product.
+avail_mb=\$(df --output=avail -BM . | tail -1 | tr -dc 0-9)
+if [ "\$avail_mb" -lt 300 ]; then
+	echo "ERROR: only \${avail_mb} MB free on the server — not building. Free space first (bh2 is shared by every product)." >&2
+	exit 1
+fi
+# Prune dangling images and the build cache however this ends, success
+# or failure, like cinder's deploy.sh does after every build: a failed
+# build would otherwise leave its cache behind. Never touches running
+# containers, volumes or tagged images.
+trap 'docker image prune -f >/dev/null 2>&1; docker builder prune -a -f >/dev/null 2>&1' EXIT
 docker compose -p $COMPOSE_PROJECT -f deploy/docker-compose.yml build wisp
 docker compose -p $COMPOSE_PROJECT -f deploy/docker-compose.yml up -d
-docker image prune -f
-# Build cache is never pruned otherwise — see cinder's deploy.sh for the
-# real "disk 80% full" incident. Never touches running containers or
-# volumes.
-docker builder prune -a -f
 docker compose -p $COMPOSE_PROJECT -f deploy/docker-compose.yml ps
 EOF
 

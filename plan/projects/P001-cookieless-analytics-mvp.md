@@ -506,3 +506,20 @@ list in its own row below. The live view is the default; old
 deploy closes 2026-10-01 at once, since its new deadline (00:16 UTC)
 had already passed.
 
+2026-10-02 — **bh2 disk incident, caused by wisp's deploy.** The deploy
+built the server image on bh2 (golang:1.24 pull, module download,
+compiling modernc.org/sqlite), which needs ~2 GB of temporary space.
+- **Sequence:** the first attempt failed with ENOSPC, leaving 933 MB of
+  build cache. After a prune, the retry drove the shared 8.7 GB disk
+  to 99% (155 MB free); the persona session spotted it and held off on
+  pruning. Killed at the user's instruction; disk back to 80%, all 19
+  containers up throughout, wisp still on its previous version.
+- **Fix:** deploy.sh cross-compiles the binary locally from the
+  packaged snapshot. The image is runtime-only (distroless, 14.1 MB),
+  so the server never compiles. The remote build/prune is trapped so
+  the cache is pruned even on failure (as cinder does after every
+  build). Deploys refuse to start with <300 MB free.
+- **Also checked for the user:** no uptime-kuma anywhere on bh2. On
+  rbserver1, the "uptime-wisp process" and the container are the same
+  process (parent: containerd-shim).
+
