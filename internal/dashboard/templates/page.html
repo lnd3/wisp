@@ -32,7 +32,7 @@
 {{if not .HasData}}
   <section class="empty">
     <h2>No closed days yet</h2>
-    <p>A day's statistics appear here once it closes, 26 hours after it starts (the day plus a 2-hour grace for late batches). Until then, see <em>Last day so far</em>.</p>
+    <p>A day's statistics appear here once it closes, 16 minutes after it ends (a short grace for the last batches). Until then, see <em>Last day so far</em>.</p>
   </section>
 {{else}}
   {{if eq .Days 1}}
@@ -78,7 +78,7 @@
 {{end}}
 
 {{if eq .View "today"}}{{with .Today}}
-  <p class="scope">{{$.ProductLabel}} · {{.Date}} (UTC), so far. Live counts from the day's open data, aggregated on the fly. They become <em>Last day</em> when the day closes at 02:00 UTC tomorrow.{{range .OpenEarlier}} {{.}} is still open too and closes shortly.{{end}}</p>
+  <p class="scope">{{$.ProductLabel}} · {{.Date}} (UTC), so far. Live counts from the day's open data, aggregated on the fly. They become <em>Last day</em> when the day closes, 16 minutes after midnight UTC.{{range .OpenEarlier}} {{.}} is still open too and closes shortly.{{end}}</p>
   {{if .HasData}}
   {{template "tiles" .Tiles}}
   <div class="grid">

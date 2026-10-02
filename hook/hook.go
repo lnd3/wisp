@@ -29,10 +29,14 @@ const (
 )
 
 // DayCloseAfter is how long after a UTC day starts wisp keeps accepting
-// batches for it: the day's 24h plus a 2h grace. Past it, wisp answers
+// batches for it: the day's 24h plus a 16-minute grace. A hook sends the
+// finished day's last batch right at midnight and retries on its
+// 5-minute ticks, so that's about three chances (≈00:00, 00:05, 00:15).
+// A product built against an older, longer value still works: its late
+// retries just get 409 and are dropped. Past it, wisp answers
 // 409 and has deleted that day's keyed data. Shared by the hook and the
 // ingest API as part of the wire contract.
-const DayCloseAfter = 26 * time.Hour
+const DayCloseAfter = 24*time.Hour + 16*time.Minute
 
 var (
 	// ErrInvalidPageKey: a page key wasn't a route template — empty, not

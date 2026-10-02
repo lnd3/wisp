@@ -18,7 +18,7 @@ Two containers:
   hook, as product `wisp`, exactly as other products integrate.
 
 **Day close:** every 10 minutes, and at startup, wisp closes each
-product-day that is past its deadline (day start + 26h). For each one
+product-day that is past its deadline (day start + 24h16m, i.e. 16 minutes after the day ends). For each one
 it:
 1. Seals the day, so late batches get `409`.
 2. Aggregates the day into keyless rows in `/data/stats.sqlite`.
@@ -229,7 +229,7 @@ deploy/ops.sh bh2 /opt/wisp live down
   domain.
 - With a real product token, a minimal batch for today returns `200`
   `{"status":"ok"}` (see `internal/ingest` for the shape).
-- After a day closes (the next day at 02:00 UTC at the latest, plus up
+- After a day closes (the next day at 00:16 UTC, plus up
   to 10 min), `deploy/ops.sh bh2 /opt/wisp live logs wisp` shows
   `dayclose: closed <product>/<day>`, and the day appears on the
   dashboard.

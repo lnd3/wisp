@@ -66,7 +66,7 @@ func at(s string) time.Time {
 // TestWorkedExample is plan/designs/D002's worked example, literally: a
 // visitor on cindernote on 2026-10-01 arrives from Hacker News at 09:00,
 // opens a note at 09:02, returns at 14:30. Two 5-minute flushes; the
-// close at 2026-10-02T02:00Z must produce exactly the rows D002 lists,
+// close at 2026-10-02T00:16Z must produce exactly the rows D002 lists,
 // and the key must then exist nowhere.
 func TestWorkedExample(t *testing.T) {
 	f := newFixture(t)
@@ -78,10 +78,10 @@ func TestWorkedExample(t *testing.T) {
 		K: keyA, Visits: 1, Views: map[string]int{"/": 1}, Agent: firefox,
 	})
 
-	if r := f.closer.Run(context.Background(), at("2026-10-02T01:59:59Z")); r != (Result{}) {
+	if r := f.closer.Run(context.Background(), at("2026-10-02T00:15:59Z")); r != (Result{}) {
 		t.Fatalf("before the deadline nothing closes; got %+v", r)
 	}
-	if r := f.closer.Run(context.Background(), at("2026-10-02T02:00:00Z")); r.Closed != 1 {
+	if r := f.closer.Run(context.Background(), at("2026-10-02T00:16:00Z")); r.Closed != 1 {
 		t.Fatalf("at the deadline: %+v; logs: %s", r, f.logs)
 	}
 
@@ -179,7 +179,7 @@ func TestSealedDayRefusesLateMerge(t *testing.T) {
 	f := newFixture(t)
 	v := hook.Visitor{K: keyA, Visits: 1, Views: map[string]int{"/": 1}, Agent: firefox}
 	f.merge(t, "cindernote", "2026-10-01", "b1", v)
-	f.closer.Run(context.Background(), at("2026-10-02T02:00:00Z"))
+	f.closer.Run(context.Background(), at("2026-10-02T00:16:00Z"))
 
 	_, err := f.store.Merge(context.Background(), "cindernote", &hook.Batch{Product: "cindernote", Day: "2026-10-01", BatchID: "late", Visitors: []hook.Visitor{v}})
 	if !errors.Is(err, staging.ErrClosed) {
@@ -188,7 +188,7 @@ func TestSealedDayRefusesLateMerge(t *testing.T) {
 	if days, _ := f.store.Days(); len(days) != 0 {
 		t.Error("a refused late merge must not recreate the staging file")
 	}
-	f.closer.Run(context.Background(), at("2026-10-02T02:10:00Z"))
+	f.closer.Run(context.Background(), at("2026-10-02T00:26:00Z"))
 	if d, _ := f.stats.ReadDay(context.Background(), "cindernote", "2026-10-01"); d == nil || d.Views != 1 {
 		t.Errorf("the day's stats must be unchanged by the late batch: %+v", d)
 	}
@@ -221,7 +221,7 @@ func TestCrashBetweenWriteAndDeleteIsIdempotent(t *testing.T) {
 	if err := f.stats.WriteDay(context.Background(), sum); err != nil {
 		t.Fatal(err)
 	}
-	if r := f.closer.Run(context.Background(), at("2026-10-02T02:00:00Z")); r.Closed != 1 {
+	if r := f.closer.Run(context.Background(), at("2026-10-02T00:16:00Z")); r.Closed != 1 {
 		t.Fatalf("the re-run close must succeed: %+v; logs: %s", r, f.logs)
 	}
 	d, _ := f.stats.ReadDay(context.Background(), "cindernote", "2026-10-01")
@@ -237,13 +237,13 @@ func TestFailingCloseRetriesThenDiscards(t *testing.T) {
 	ev := events.New(nil)
 	f.closer.Events = ev
 
-	if r := f.closer.Run(context.Background(), at("2026-10-02T02:30:00Z")); r.Retrying != 1 {
+	if r := f.closer.Run(context.Background(), at("2026-10-02T00:46:00Z")); r.Retrying != 1 {
 		t.Fatalf("within MaxDelay: %+v", r)
 	}
 	if days, _ := f.store.Days(); len(days) != 1 {
 		t.Fatal("a failed close must keep the staging file for a retry")
 	}
-	if r := f.closer.Run(context.Background(), at("2026-10-02T03:00:00Z")); r.Discarded != 1 {
+	if r := f.closer.Run(context.Background(), at("2026-10-02T01:17:00Z")); r.Discarded != 1 {
 		t.Fatalf("past MaxDelay: %+v", r)
 	}
 	if days, _ := f.store.Days(); len(days) != 0 {

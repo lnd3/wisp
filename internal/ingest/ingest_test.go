@@ -143,7 +143,7 @@ func TestAuthentication(t *testing.T) {
 }
 
 func TestDayWindow(t *testing.T) {
-	f := newFixture(t, "2026-10-02T01:59:00Z") // 2026-10-01's close is 02:00Z
+	f := newFixture(t, "2026-10-02T00:15:00Z") // 2026-10-01's close is 00:16Z
 	b := goodBatch()
 	if st, _ := f.post(t, tokenCinder, b); st != 200 {
 		t.Errorf("within grace: got %d", st)

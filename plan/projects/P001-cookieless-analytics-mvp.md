@@ -117,7 +117,8 @@ full technical design.
       per-key daily distributions; wisp deletes keys at day close (D001)
 - [ ] Pin down exact hash inputs (which browser fields beyond IP+UA,
       if any) and salt scope (per-product vs. shared)
-- [ ] Confirm D002's proposed wire format, day close (UTC + 2h grace),
+- [ ] Confirm D002's proposed wire format, day close (grace decided
+      2026-10-02: 16 min),
       staging/stats DB layout, and the (proposed) defaults
 - [x] Choose storage: SQLite for both staging and stats (D002); defer
       anything heavier until query load demands it
@@ -500,4 +501,8 @@ list in its own row below. The live view is the default; old
   "visitors" wording throughout. A test forbids "visitor-days" on that
   page.
 - Rendered on desktop and mobile.
+
+2026-10-02 — Day-close grace cut to 16 minutes (user), see D002. The
+deploy closes 2026-10-01 at once, since its new deadline (00:16 UTC)
+had already passed.
 

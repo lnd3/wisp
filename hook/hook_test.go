@@ -519,7 +519,7 @@ func TestExpiredBatchDroppedUnsent(t *testing.T) {
 	h.flush()
 	h.sendDue(context.Background(), false)
 
-	clock.Advance(17 * time.Hour) // 2026-10-02T02:00Z = day start + 26h
+	clock.Advance(15*time.Hour + 16*time.Minute) // 2026-10-02T00:16Z = day start + 24h16m
 	h.sendDue(context.Background(), true)
 	if n := len(in.requests()); n != 1 {
 		t.Errorf("a batch past its close deadline must not be sent; %d requests", n)

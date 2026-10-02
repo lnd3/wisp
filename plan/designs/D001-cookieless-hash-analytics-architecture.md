@@ -287,7 +287,7 @@ verified with jsdom rather than assumed correct from reading the code.
   Each extra field trades the deliberate lower bound for fingerprint
   precision, which CLAUDE.md rules out.
 - ~~Day boundary + grace~~ **Resolved (implemented, D002 §4):** UTC
-  days. A day closes at start + 26h (`hook.DayCloseAfter`). A late
+  days. A day closes at start + 24h16m (`hook.DayCloseAfter`; the grace was 2h until 2026-10-02). A late
   batch gets 409 and the hook drops it.
 - ~~Product statistics DB layout~~ **Resolved (implemented, D002
   §5):** one SQLite DB with a product column. Additive columns sum

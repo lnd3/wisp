@@ -13,7 +13,7 @@
   ingest API exists.
 - **wisp is live and counting**: cinderapps (cinder's A022, done from
   cinder's side) and wisp's own landing page report into staging. The
-  first day closes onto the dashboard at 2026-10-02 02:00 UTC.
+  first day (2026-10-01) closes on the 16-min-grace deploy, 2026-10-02.
   Products register with `deploy/ops.sh … register <key>` (merge-only).
 - **D001's revision to backend-only ingest.** Products' servers send
   unique events or (preferably) aggregates. No browser ever talks to
