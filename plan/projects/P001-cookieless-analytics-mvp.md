@@ -550,3 +550,7 @@ systemd journal. Removal of the cinder images is left to the user;
 the toolchain image is listed in cinder A024. wisp's own old image was
 removed.
 
+2026-10-02 (later) — bh2's systemd journal capped at 100 MB (user):
+drop-in `/etc/systemd/journald.conf.d/size.conf` (`SystemMaxUse=100M`).
+The journal went from 478 MB to 93 MB, and the disk from 80% to 75%.
+
