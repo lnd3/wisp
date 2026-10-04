@@ -1,7 +1,7 @@
 ---
 id: A001
 title: uptime-wisp should verify its own connectivity before declaring a target down
-status: IN_PROGRESS
+status: DONE
 project: P001
 created: 2026-10-04
 updated: 2026-10-04
@@ -98,3 +98,13 @@ The user approved building the gate. Built in package `uptime`:
 Replay test: `TestOfflineRoundsJudgeNothing` (01:38's shape: two
 offline rounds, all failing) now sends zero alerts. It used to send
 38.
+
+2026-10-04 — Deployed to rbserver1 (744454f). The live config passed
+unchanged; the status page shows "connectivity ok: 3/3 anchors
+answering" and all 19 checks up. **Live test:** the container was
+disconnected from its Docker network for 2.5 min (07:04:50–07:07:20
+UTC), cutting it off the way a Starlink drop would.
+- uptime-wisp logged one "connectivity lost: all 3 anchors failed"
+  line at 07:05:24 and "connectivity back after 2m0s" at 07:07:24.
+- **No alerts were sent.** The old version would have marked all 19
+  checks down, then paged 19 recoveries.
