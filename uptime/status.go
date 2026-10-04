@@ -48,6 +48,7 @@ button{font:inherit;padding:4px 12px;border-radius:6px;border:1px solid var(--li
 <h1>uptime-wisp</h1>
 <div class="bar"><p>{{len .States}} checks every {{.Interval}} · last round {{ago .Last}} · refreshes every 30s</p>
 <form method="post" action="/reload"><button type="submit" title="Re-read config.json and apply it; an invalid file is rejected and the running config kept">Reload config</button></form></div>
+{{with .Conn}}{{if .Enabled}}{{if .OfflineSince.IsZero}}<p>connectivity ok: {{.AnchorsUp}}/{{.AnchorsTotal}} anchors answering</p>{{else}}<p class="rl err">uptime-wisp itself is OFFLINE since {{.OfflineSince.Format "15:04:05 UTC"}} (every connectivity anchor failed), so checks are paused, not judged: {{.Detail}}</p>{{end}}{{end}}{{end}}
 {{with .Reload}}<p class="rl{{if not .OK}} err{{end}}">{{.Time.Format "15:04:05 UTC"}}: {{.Message}}</p>{{end}}
 <table><thead><tr><th>Status</th><th>Check</th><th>Detail</th><th>Latency</th><th>Since</th><th>Cert expires in</th></tr></thead><tbody>
 {{range .States}}<tr><td class="s {{.Status}}">{{.Status}}</td><td>{{.Name}}<div class="t">{{.Target}}</div></td><td>{{.Detail}}</td><td class="n">{{ms .Latency}}</td><td class="n">{{ago .Since}}</td><td class="n">{{days .CertExpiry}}</td></tr>
@@ -73,7 +74,8 @@ func (m *Monitor) Handler() http.Handler {
 			Last     time.Time
 			Interval time.Duration
 			Reload   *ReloadResult
-		}{states, last, m.config().Interval.Duration, reload})
+			Conn     ConnState
+		}{states, last, m.config().Interval.Duration, reload, m.Conn()})
 	}))
 	// Reload re-reads config.json. Behind the login, and refused for
 	// cross-site requests: a browser would otherwise attach the cached

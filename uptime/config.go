@@ -34,7 +34,20 @@ const (
 	DefaultMaxDiskPct    = 90
 	DefaultMaxMemPct     = 95
 	DefaultMaxLoadPerCPU = 2.0
+
+	DefaultReportAfter = 5 * time.Minute
 )
+
+// DefaultAnchors are the connectivity anchors used when the config names
+// none: three providers that don't share infrastructure, so only the
+// prober's own uplink failing takes all three down at once.
+func DefaultAnchors() []CheckConfig {
+	return []CheckConfig{
+		{Name: "anchor Cloudflare DNS", Type: "dns", Host: "cloudflare.com", Server: "1.1.1.1"},
+		{Name: "anchor Quad9 DNS", Type: "dns", Host: "quad9.net", Server: "9.9.9.9"},
+		{Name: "anchor Google HTTPS", Type: "http", URL: "https://www.google.com/generate_204", ExpectStatus: []int{204}},
+	}
+}
 
 // Duration is a time.Duration that unmarshals from "60s"-style strings.
 type Duration struct{ time.Duration }
@@ -64,6 +77,7 @@ type Config struct {
 	Listen              string        `json:"listen"`                // status page + /healthz, e.g. ":8080"; "" disables
 	Heartbeat           *Heartbeat    `json:"heartbeat"`
 	Auth                *Auth         `json:"auth"` // required when the status page is served
+	Connectivity        *Connectivity `json:"connectivity"`
 	Alerts              []AlertConfig `json:"alerts"`
 	Checks              []CheckConfig `json:"checks"`
 }
@@ -81,6 +95,18 @@ type Heartbeat struct {
 type Auth struct {
 	User           string `json:"user"`
 	PasswordSHA256 string `json:"password_sha256"`
+}
+
+// Connectivity is the prober's own reachability gate (plan A001). Every
+// round also probes the anchors; when every anchor fails, the prober
+// itself is offline, so that round judges nothing: no failure counts,
+// no down alerts. The prober's own uplink dropping must not read as
+// every target failing at once. Once it's back, an outage of at least
+// ReportAfter is reported in one alert.
+type Connectivity struct {
+	Disabled    bool          `json:"disabled"`     // turn the gate off
+	Anchors     []CheckConfig `json:"anchors"`      // http/dns checks; default DefaultAnchors()
+	ReportAfter Duration      `json:"report_after"` // default 5m
 }
 
 // AlertConfig is one notification channel.
@@ -208,59 +234,90 @@ func Parse(b []byte) (*Config, error) {
 			errs = append(errs, fmt.Errorf("checks[%d]: duplicate name %q", i, ck.Name))
 		}
 		seen[ck.Name] = true
-		switch ck.Type {
-		case "http":
-			if !httpURL(ck.URL) {
-				errs = append(errs, fmt.Errorf("check %q: url must be an http(s) URL", ck.Name))
+		errs = append(errs, ck.validate()...)
+	}
+
+	if c.Connectivity == nil {
+		c.Connectivity = &Connectivity{}
+	}
+	if cn := c.Connectivity; !cn.Disabled {
+		if len(cn.Anchors) == 0 {
+			cn.Anchors = DefaultAnchors()
+		}
+		if cn.ReportAfter.Duration == 0 {
+			cn.ReportAfter.Duration = DefaultReportAfter
+		}
+		for i := range cn.Anchors {
+			a := &cn.Anchors[i]
+			if a.Type != "http" && a.Type != "dns" {
+				errs = append(errs, fmt.Errorf("connectivity.anchors[%d]: type must be \"http\" or \"dns\"", i))
+				continue
 			}
-			if len(ck.ExpectStatus) == 0 {
-				ck.ExpectStatus = []int{200}
+			errs = append(errs, a.validate()...)
+			if a.Name == "" {
+				a.Name = "anchor " + a.Target()
 			}
-		case "dns":
-			if ck.Host == "" || ck.Server == "" {
-				errs = append(errs, fmt.Errorf("check %q: dns needs host and server", ck.Name))
-			}
-			if _, _, err := net.SplitHostPort(ck.Server); err != nil {
-				ck.Server = net.JoinHostPort(ck.Server, "53")
-			}
-			if ck.RecordType == "" {
-				ck.RecordType = "A"
-			}
-			if ck.RecordType != "A" && ck.RecordType != "AAAA" {
-				errs = append(errs, fmt.Errorf("check %q: record_type must be A or AAAA", ck.Name))
-			}
-			for _, e := range ck.Expect {
-				if net.ParseIP(e) == nil {
-					errs = append(errs, fmt.Errorf("check %q: expect %q is not an IP address", ck.Name, e))
-				}
-			}
-		case "host":
-			if !httpURL(ck.URL) {
-				errs = append(errs, fmt.Errorf("check %q: url must be an http(s) URL", ck.Name))
-			}
-			if ck.Token == "" {
-				errs = append(errs, fmt.Errorf("check %q: host needs the health-wisp token", ck.Name))
-			}
-			if ck.MaxDiskPct == 0 {
-				ck.MaxDiskPct = DefaultMaxDiskPct
-			}
-			if ck.MaxMemPct == 0 {
-				ck.MaxMemPct = DefaultMaxMemPct
-			}
-			if ck.MaxLoadPerCPU == 0 {
-				ck.MaxLoadPerCPU = DefaultMaxLoadPerCPU
-			}
-			if ck.MaxDiskPct < 1 || ck.MaxDiskPct > 100 || ck.MaxMemPct < 1 || ck.MaxMemPct > 100 || ck.MaxLoadPerCPU < 0 {
-				errs = append(errs, fmt.Errorf("check %q: max_disk_pct and max_mem_pct must be 1-100, max_load_per_cpu positive", ck.Name))
-			}
-		default:
-			errs = append(errs, fmt.Errorf("check %q: type must be \"http\", \"dns\" or \"host\"", ck.Name))
 		}
 	}
 	if err := errors.Join(errs...); err != nil {
 		return nil, fmt.Errorf("config: %w", err)
 	}
 	return &c, nil
+}
+
+// validate checks one check's type-specific fields and fills their
+// defaults. Shared by checks and connectivity anchors.
+func (ck *CheckConfig) validate() []error {
+	var errs []error
+	switch ck.Type {
+	case "http":
+		if !httpURL(ck.URL) {
+			errs = append(errs, fmt.Errorf("check %q: url must be an http(s) URL", ck.Name))
+		}
+		if len(ck.ExpectStatus) == 0 {
+			ck.ExpectStatus = []int{200}
+		}
+	case "dns":
+		if ck.Host == "" || ck.Server == "" {
+			errs = append(errs, fmt.Errorf("check %q: dns needs host and server", ck.Name))
+		}
+		if _, _, err := net.SplitHostPort(ck.Server); err != nil {
+			ck.Server = net.JoinHostPort(ck.Server, "53")
+		}
+		if ck.RecordType == "" {
+			ck.RecordType = "A"
+		}
+		if ck.RecordType != "A" && ck.RecordType != "AAAA" {
+			errs = append(errs, fmt.Errorf("check %q: record_type must be A or AAAA", ck.Name))
+		}
+		for _, e := range ck.Expect {
+			if net.ParseIP(e) == nil {
+				errs = append(errs, fmt.Errorf("check %q: expect %q is not an IP address", ck.Name, e))
+			}
+		}
+	case "host":
+		if !httpURL(ck.URL) {
+			errs = append(errs, fmt.Errorf("check %q: url must be an http(s) URL", ck.Name))
+		}
+		if ck.Token == "" {
+			errs = append(errs, fmt.Errorf("check %q: host needs the health-wisp token", ck.Name))
+		}
+		if ck.MaxDiskPct == 0 {
+			ck.MaxDiskPct = DefaultMaxDiskPct
+		}
+		if ck.MaxMemPct == 0 {
+			ck.MaxMemPct = DefaultMaxMemPct
+		}
+		if ck.MaxLoadPerCPU == 0 {
+			ck.MaxLoadPerCPU = DefaultMaxLoadPerCPU
+		}
+		if ck.MaxDiskPct < 1 || ck.MaxDiskPct > 100 || ck.MaxMemPct < 1 || ck.MaxMemPct > 100 || ck.MaxLoadPerCPU < 0 {
+			errs = append(errs, fmt.Errorf("check %q: max_disk_pct and max_mem_pct must be 1-100, max_load_per_cpu positive", ck.Name))
+		}
+	default:
+		errs = append(errs, fmt.Errorf("check %q: type must be \"http\", \"dns\" or \"host\"", ck.Name))
+	}
+	return errs
 }
 
 // HashPassword returns the hex SHA-256 stored as auth.password_sha256.

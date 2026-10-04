@@ -114,9 +114,10 @@ func main() {
 }
 
 // printOnce runs one round without alerting and prints a table; the exit
-// code is 1 if anything failed.
+// code is 1 if anything failed (or 3 if every connectivity anchor failed:
+// then the check results say nothing about the targets).
 func printOnce(ctx context.Context, m *uptime.Monitor) int {
-	results := m.Probe(ctx)
+	results, anchors := m.Probe(ctx)
 	states, _ := m.Snapshot()
 	tw := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 	fmt.Fprintln(tw, "RESULT\tCHECK\tTARGET\tDETAIL\tLATENCY\tCERT EXPIRES")
@@ -132,7 +133,22 @@ func printOnce(ctx context.Context, m *uptime.Monitor) int {
 		}
 		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\n", res, states[i].Name, states[i].Target, r.Detail, r.Latency.Round(time.Millisecond), cert)
 	}
+	anchorsUp := 0
+	for i, r := range anchors {
+		res := "anchor"
+		if r.OK {
+			anchorsUp++
+		} else {
+			res = "ANCHOR FAIL"
+		}
+		a := m.Anchors()[i]
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\n", res, a.Name, a.Target(), r.Detail, r.Latency.Round(time.Millisecond), "—")
+	}
 	tw.Flush()
+	if len(anchors) > 0 && anchorsUp == 0 {
+		fmt.Println("OFFLINE: every connectivity anchor failed, so the results above are about this host's own uplink, not the targets.")
+		return 3
+	}
 	return code
 }
 

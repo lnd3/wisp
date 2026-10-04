@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 )
@@ -58,6 +59,17 @@ type Monitor struct {
 	loader     func() (*Config, error)
 	lastReload *ReloadResult
 	reloaded   chan struct{} // tells Run to reset its ticker and run a round now
+	conn       ConnState
+}
+
+// ConnState is the prober's own connectivity, from the last round's
+// anchors (Config.Connectivity).
+type ConnState struct {
+	Enabled      bool
+	AnchorsUp    int
+	AnchorsTotal int
+	OfflineSince time.Time // zero while online
+	Detail       string    // the anchors' failures while offline
 }
 
 // ReloadResult is the outcome of the last config reload, shown on the
@@ -125,6 +137,7 @@ func (m *Monitor) applyConfig(cfg *Config) (added, removed, changed int) {
 
 	m.cfg = cfg
 	m.states = states
+	m.conn.Enabled = !cfg.Connectivity.Disabled
 	m.prober = newProber(cfg, m.roots)
 	if m.checkIsProber {
 		m.check = m.prober.run
@@ -211,15 +224,17 @@ func (m *Monitor) Run(ctx context.Context) {
 	}
 }
 
-// Probe runs every check concurrently and returns the results in
-// config order, without touching state or alerting.
-func (m *Monitor) Probe(ctx context.Context) []Result {
+// Probe runs every check and connectivity anchor concurrently and
+// returns their results in config order, without touching state or
+// alerting.
+func (m *Monitor) Probe(ctx context.Context) (checks, anchors []Result) {
 	m.mu.Lock()
-	checks, check := m.cfg.Checks, m.check
+	cks, anc, check := m.cfg.Checks, m.anchors(), m.check
 	m.mu.Unlock()
-	results := make([]Result, len(checks))
+	all := append(append([]CheckConfig{}, cks...), anc...)
+	results := make([]Result, len(all))
 	var wg sync.WaitGroup
-	for i, c := range checks {
+	for i, c := range all {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -227,7 +242,21 @@ func (m *Monitor) Probe(ctx context.Context) []Result {
 		}()
 	}
 	wg.Wait()
-	return results
+	return results[:len(cks)], results[len(cks):]
+}
+
+// Anchors returns the connectivity anchors (none when the gate is off).
+func (m *Monitor) Anchors() []CheckConfig {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.anchors()
+}
+
+func (m *Monitor) anchors() []CheckConfig {
+	if m.cfg.Connectivity.Disabled {
+		return nil
+	}
+	return m.cfg.Connectivity.Anchors
 }
 
 // Round runs every check, applies the results, sends any alerts, and
@@ -235,11 +264,11 @@ func (m *Monitor) Probe(ctx context.Context) []Result {
 func (m *Monitor) Round(ctx context.Context) {
 	m.roundMu.Lock()
 	defer m.roundMu.Unlock()
-	results := m.Probe(ctx)
+	results, anchors := m.Probe(ctx)
 	if ctx.Err() != nil {
 		return
 	}
-	alerts := m.apply(results)
+	alerts := group(m.apply(results, anchors))
 	for _, a := range alerts {
 		m.send(ctx, a)
 	}
@@ -247,13 +276,48 @@ func (m *Monitor) Round(ctx context.Context) {
 }
 
 // apply folds one round of results into the states and returns the
-// alerts that state changes call for.
-func (m *Monitor) apply(results []Result) []Alert {
+// alerts that state changes call for. When every anchor failed, the
+// prober itself is offline: the round judges no check (failure counts
+// and states stay as they were) and alerts nothing.
+func (m *Monitor) apply(results, anchors []Result) []Alert {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	now := m.now().UTC()
 	m.lastRound = now
 	var alerts []Alert
+
+	if len(anchors) > 0 {
+		up := 0
+		var failed []string
+		for i, r := range anchors {
+			if r.OK {
+				up++
+			} else {
+				failed = append(failed, m.cfg.Connectivity.Anchors[i].Name+": "+r.Detail)
+			}
+		}
+		m.conn.AnchorsUp, m.conn.AnchorsTotal = up, len(anchors)
+		if up == 0 {
+			if m.conn.OfflineSince.IsZero() {
+				m.conn.OfflineSince = now
+				m.log.Printf("connectivity lost: all %d anchors failed (%s); not judging checks until one answers", len(anchors), strings.Join(failed, "; "))
+			}
+			m.conn.Detail = strings.Join(failed, "; ")
+			return nil
+		}
+		if since := m.conn.OfflineSince; !since.IsZero() {
+			off := now.Sub(since)
+			m.log.Printf("connectivity back after %s", roundDur(off))
+			if off >= m.cfg.Connectivity.ReportAfter.Duration {
+				alerts = append(alerts, Alert{Kind: KindProber, Time: now,
+					Title: "uptime-wisp was offline for " + roundDur(off),
+					Message: fmt.Sprintf("uptime-wisp lost its own connectivity from %s to %s (every connectivity anchor failed), so no check was judged in that time. Its own uplink, not the targets.",
+						since.Format("15:04 UTC"), now.Format("15:04 UTC"))})
+			}
+			m.conn.OfflineSince, m.conn.Detail = time.Time{}, ""
+		}
+	}
+
 	for i, r := range results {
 		s := m.states[i]
 		s.LastCheck, s.Detail, s.Latency, s.CertExpiry = now, r.Detail, r.Latency, r.CertExpiry
@@ -346,6 +410,52 @@ func (m *Monitor) heartbeat(ctx context.Context) {
 	if resp.StatusCode > 299 {
 		m.log.Printf("heartbeat failed: HTTP %d", resp.StatusCode)
 	}
+}
+
+// Conn returns the prober's own connectivity state.
+func (m *Monitor) Conn() ConnState {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.conn
+}
+
+// groupFrom is how many same-kind state changes in one round get folded
+// into a single alert: a shared cause (a server, its network) shouldn't
+// arrive as a wall of separate notifications.
+const groupFrom = 3
+
+// group folds a round's down (and up) alerts into one alert per kind
+// when there are at least groupFrom of them. Others pass unchanged.
+func group(alerts []Alert) []Alert {
+	byKind := map[string][]Alert{}
+	for _, a := range alerts {
+		byKind[a.Kind] = append(byKind[a.Kind], a)
+	}
+	var out []Alert
+	done := map[string]bool{}
+	for _, a := range alerts {
+		same := byKind[a.Kind]
+		if (a.Kind != KindDown && a.Kind != KindUp) || len(same) < groupFrom {
+			out = append(out, a)
+			continue
+		}
+		if done[a.Kind] {
+			continue
+		}
+		done[a.Kind] = true
+		names := make([]string, len(same))
+		lines := make([]string, len(same))
+		for i, x := range same {
+			names[i], lines[i] = x.Check, x.Message
+		}
+		title := fmt.Sprintf("%d checks DOWN", len(same))
+		if a.Kind == KindUp {
+			title = fmt.Sprintf("%d checks back up", len(same))
+		}
+		out = append(out, Alert{Check: strings.Join(names, ", "), Kind: a.Kind, Time: a.Time,
+			Title: title, Message: strings.Join(lines, "\n")})
+	}
+	return out
 }
 
 // Snapshot returns copies of the current states and the time of the

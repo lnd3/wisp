@@ -89,8 +89,15 @@ func (r *recorder) kinds() string {
 }
 
 // scripted builds a monitor whose single check returns the given results
-// in order, one per round.
+// in order, one per round. Its connectivity anchors always answer.
 func scripted(t *testing.T, results ...Result) (*Monitor, *recorder, *time.Time) {
+	t.Helper()
+	return scriptedNet(t, nil, results...)
+}
+
+// scriptedNet is scripted with the anchors scripted too: online[i] says
+// whether round i's anchors answer (missing rounds: they do).
+func scriptedNet(t *testing.T, online []bool, results ...Result) (*Monitor, *recorder, *time.Time) {
 	t.Helper()
 	now := time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)
 	m := New(cfgWith(t, `[{"name":"site","type":"http","url":"https://site.example/"}]`),
@@ -99,8 +106,22 @@ func scripted(t *testing.T, results ...Result) (*Monitor, *recorder, *time.Time)
 	m.alerters = []Alerter{rec}
 	m.backoff = nil
 	m.checkIsProber = false
-	i := 0
-	m.check = func(context.Context, CheckConfig) Result {
+	var mu sync.Mutex
+	i, anchorCalls := 0, 0
+	perRound := len(m.Anchors())
+	m.check = func(_ context.Context, c CheckConfig) Result {
+		mu.Lock()
+		defer mu.Unlock()
+		if strings.HasPrefix(c.Name, "anchor ") {
+			// Anchors run concurrently with the check, so count rounds by
+			// anchor calls, not by the check's own progress.
+			round := anchorCalls / perRound
+			anchorCalls++
+			if round < len(online) && !online[round] {
+				return Result{Detail: "timeout"}
+			}
+			return ok
+		}
 		r := results[i]
 		i++
 		return r
@@ -467,7 +488,12 @@ func reloadable(t *testing.T, checks string, results map[string]Result) (*Monito
 	m.alerters = []Alerter{rec}
 	m.backoff = nil
 	m.checkIsProber = false
-	m.check = func(_ context.Context, c CheckConfig) Result { return results[c.Name] }
+	m.check = func(_ context.Context, c CheckConfig) Result {
+		if strings.HasPrefix(c.Name, "anchor ") {
+			return ok
+		}
+		return results[c.Name]
+	}
 	return m, rec
 }
 
@@ -534,7 +560,10 @@ func TestReloadRejectsInvalid(t *testing.T) {
 func TestReloadWaitsForRunningRound(t *testing.T) {
 	m, _ := reloadable(t, `[{"name":"a","type":"http","url":"https://a.example/"}]`, nil)
 	started, release := make(chan struct{}), make(chan struct{})
-	m.check = func(context.Context, CheckConfig) Result {
+	m.check = func(_ context.Context, c CheckConfig) Result {
+		if strings.HasPrefix(c.Name, "anchor ") {
+			return ok
+		}
 		close(started)
 		<-release
 		return ok
@@ -615,5 +644,103 @@ func TestReloadEndpoint(t *testing.T) {
 	}
 	if st, body := get("new password here"); st != 200 || !strings.Contains(body, "config reloaded: 2 checks (1 added") || !strings.Contains(body, `action="/reload"`) {
 		t.Errorf("page after reload = %d, has message: %v", st, strings.Contains(body, "config reloaded"))
+	}
+}
+
+// ---- connectivity gate (plan A001) ----
+
+func TestConnectivityConfig(t *testing.T) {
+	c := cfgWith(t, `[{"name":"a","type":"http","url":"https://a.example/"}]`)
+	if cn := c.Connectivity; cn.Disabled || len(cn.Anchors) != 3 || cn.ReportAfter.Duration != 5*time.Minute {
+		t.Errorf("defaults = %+v", cn)
+	}
+	if a := c.Connectivity.Anchors[0]; a.Server != "1.1.1.1:53" || a.RecordType != "A" {
+		t.Errorf("anchor defaults not filled: %+v", a)
+	}
+	base := `{"alerts":[{"type":"ntfy","url":"https://ntfy.sh/t"}],"checks":[{"name":"a","type":"http","url":"https://a/"}],"connectivity":`
+	off, err := Parse([]byte(base + `{"disabled":true}}`))
+	if err != nil || len(off.Connectivity.Anchors) != 0 {
+		t.Errorf("disabled: %v %+v", err, off)
+	}
+	own, err := Parse([]byte(base + `{"anchors":[{"type":"dns","host":"example.org","server":"192.0.2.1"}],"report_after":"10m"}}`))
+	if err != nil || len(own.Connectivity.Anchors) != 1 || own.Connectivity.Anchors[0].Name != "anchor A example.org @192.0.2.1:53" {
+		t.Errorf("own anchors: %v %+v", err, own)
+	}
+	if _, err := Parse([]byte(base + `{"anchors":[{"type":"host","url":"https://h/","token":"t"}]}}`)); err == nil {
+		t.Error("a host-type anchor was accepted")
+	}
+}
+
+// The 2026-10-04 01:38 incident: the prober's own uplink drops for
+// about a minute, so every check and every anchor times out for two
+// rounds. That used to page 19 downs and 19 ups; now nothing.
+func TestOfflineRoundsJudgeNothing(t *testing.T) {
+	m, rec, now := scriptedNet(t, []bool{true, false, false, true}, ok, fail, fail, ok)
+	for range 4 {
+		m.Round(context.Background())
+		*now = now.Add(time.Minute)
+	}
+	if rec.kinds() != "" {
+		t.Errorf("alerts = %q, want none for the prober's own blip", rec.kinds())
+	}
+	if st, _ := stateOf(m, "site"); st.Status != StatusUp || st.Failures != 0 {
+		t.Errorf("state = %+v", st)
+	}
+	if c := m.Conn(); !c.OfflineSince.IsZero() || c.AnchorsUp != 3 {
+		t.Errorf("conn = %+v", c)
+	}
+}
+
+func TestOfflineFreezesFailureCount(t *testing.T) {
+	// fail (online), offline round, fail (online): still two failures in
+	// a row as far as judged rounds go, so it goes down.
+	m, rec, _ := scriptedNet(t, []bool{true, false, true}, fail, fail, fail)
+	for range 3 {
+		m.Round(context.Background())
+	}
+	if rec.kinds() != "down" {
+		t.Errorf("alerts = %q, want down", rec.kinds())
+	}
+}
+
+func TestLongOutageReportedOnceWhenBack(t *testing.T) {
+	online := []bool{true, false, false, false, false, false, false, true, true}
+	results := []Result{ok, fail, fail, fail, fail, fail, fail, ok, ok}
+	m, rec, now := scriptedNet(t, online, results...)
+	for i := range 9 {
+		m.Round(context.Background())
+		if i == 3 {
+			if c := m.Conn(); c.OfflineSince.IsZero() || c.AnchorsUp != 0 || !strings.Contains(c.Detail, "timeout") {
+				t.Errorf("while offline: conn = %+v", c)
+			}
+		}
+		*now = now.Add(time.Minute)
+	}
+	if rec.kinds() != "prober" {
+		t.Fatalf("alerts = %q, want one prober alert", rec.kinds())
+	}
+	if a := rec.sent[0]; a.Title != "uptime-wisp was offline for 6m0s" || !strings.Contains(a.Message, "12:01 UTC to 12:07 UTC") {
+		t.Errorf("alert = %+v", a)
+	}
+}
+
+func TestGroupFoldsSimultaneousChanges(t *testing.T) {
+	down := func(n string) Alert { return Alert{Check: n, Kind: KindDown, Message: n + " failed"} }
+	got := group([]Alert{down("a"), down("b"), {Check: "c", Kind: KindCert}, down("d")})
+	if len(got) != 2 || got[0].Title != "3 checks DOWN" || got[0].Check != "a, b, d" || got[0].Message != "a failed\nb failed\nd failed" || got[1].Kind != KindCert {
+		t.Errorf("grouped = %+v", got)
+	}
+	if got := group([]Alert{down("a"), down("b")}); len(got) != 2 || got[0].Title != "" {
+		t.Errorf("two alerts must pass unchanged: %+v", got)
+	}
+}
+
+func TestGroupedRound(t *testing.T) {
+	checks := `[{"name":"a","type":"http","url":"https://a/"},{"name":"b","type":"http","url":"https://b/"},{"name":"c","type":"http","url":"https://c/"}]`
+	m, rec := reloadable(t, checks, map[string]Result{"a": fail, "b": fail, "c": fail})
+	m.Round(context.Background())
+	m.Round(context.Background())
+	if len(rec.sent) != 1 || rec.sent[0].Title != "3 checks DOWN" {
+		t.Errorf("sent = %+v", rec.sent)
 	}
 }

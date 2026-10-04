@@ -12,10 +12,11 @@ import (
 
 // Alert kinds.
 const (
-	KindDown = "down"
-	KindUp   = "up"
-	KindCert = "cert"
-	KindTest = "test"
+	KindDown   = "down"
+	KindUp     = "up"
+	KindCert   = "cert"
+	KindTest   = "test"
+	KindProber = "prober" // the prober's own connectivity
 )
 
 // Alert is one notification.
@@ -61,7 +62,7 @@ func (n *ntfy) Send(ctx context.Context, a Alert) error {
 		req.Header.Set("Tags", "rotating_light")
 	case KindUp:
 		req.Header.Set("Tags", "white_check_mark")
-	case KindCert:
+	case KindCert, KindProber:
 		req.Header.Set("Tags", "warning")
 	default:
 		req.Header.Set("Tags", "information_source")

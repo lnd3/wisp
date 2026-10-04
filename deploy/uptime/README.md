@@ -19,10 +19,24 @@ Every interval (default 60s), from outside the machines it watches:
 - **Host checks.** GET a machine's health-wisp report (with its
   token) and hold disk, memory and load against limits. One row per
   machine. See `deploy/health/README.md`.
+- **A connectivity gate.** Each round also probes three anchors from
+  providers that share no infrastructure: DNS at 1.1.1.1 and 9.9.9.9,
+  and Google's `generate_204` over HTTPS.
+  - **All anchors fail:** the prober itself is offline. That round
+    judges nothing (no failure counts, no alerts), and the status page
+    says "OFFLINE, checks paused".
+  - **Back online:** an outage of at least `report_after` (5 min) gets
+    one "uptime-wisp was offline for …" alert.
+
+  Added after 2026-10-04 01:38 UTC, when rbserver1's own Starlink
+  uplink dropped for about a minute and paged 19 downs and 19 ups (plan
+  A001).
 - **Alerts only on change:**
   - DOWN after `failures_before_alert` (2) failures in a row
   - "back up", with how long it was down
   - certificate expiring soon, once per certificate
+  - three or more checks changing the same way in one round arrive as
+    **one** grouped alert ("4 checks DOWN", one line each)
 
   Channels: **ntfy** (topic URL) and/or a **generic webhook** (JSON).
   Both are third-party, independent of bh2 and rbserver1.
@@ -96,7 +110,8 @@ plain HTTP is fine on a home LAN, but the password crosses the network
 unencrypted, so don't expose this port to the internet.
 
 **Dry run a config** without alerting (exit 1 if any check fails,
-exit 2 if the config is invalid):
+exit 2 if the config is invalid, exit 3 if every anchor failed, i.e. this
+host is offline):
 `uptime-wisp -config config.json -once`
 
 ## Config
@@ -112,6 +127,7 @@ URL. Fields:
 | `cert_warn_days` | `14` | warn when a certificate expires sooner |
 | `resolver` | `1.1.1.1:53` | DNS server for HTTP checks' own lookups |
 | `heartbeat.url` | — | optional dead-man's-switch ping |
+| `connectivity` | on, default anchors | `{"disabled":true}` to turn the gate off; `anchors` (http/dns checks), `report_after` (`5m`) |
 | `auth` | required with the status page | `{"user":…, "password_sha256":…}` |
 | `alerts[]` | required | `{"type":"ntfy"\|"webhook","url":…,"token":…}` |
 | `checks[]` | required | `http`: `url`, `expect_status`; `dns`: `host`, `server`, `record_type` (A/AAAA), `expect`; `host`: `url`, `token`, `max_disk_pct` (90), `max_mem_pct` (95), `max_load_per_cpu` (2.0) |
