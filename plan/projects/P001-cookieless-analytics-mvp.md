@@ -650,3 +650,19 @@ added the EphemNet zones entry themselves).
   user had added.
 - **Status:** uptime-wisp reloaded (20 checks). bh2 host, bh3 host and
   rbserver1 host are all up.
+
+2026-10-04 — **Session wrap.**
+- **Built and live since the 2026-10-02 wrap:**
+  - health-wisp on bh2, bh3 and rbserver1, plus uptime-wisp's `host`
+    check.
+  - bh3 prepared: cinder's shared nginx skeleton and ufw.
+  - ufw logging off on bh2 and bh3, with bh2's old ufw logs deleted.
+  - uptime-wisp's connectivity gate and alert grouping (A001, DONE,
+    with its cause corrected from the prober's own logs).
+- **Told:** cinder about its failing `monitor.sh` on bh2. That's moot
+  now that cinder has left bh2, but the bug travels with the script.
+  EphemNet was told about the corrected incident cause.
+- **cinder moved its live stack to bh3** (cinder A026). cinderapps
+  keeps reporting to wisp, and all 19 uptime checks are up.
+
+Next is in FOCUS.md.
