@@ -1,6 +1,6 @@
 # wisp Plan Index
 
-*Last updated: 2026-10-02 21:19:45 UTC*
+*Last updated: 2026-10-04 08:57:47 UTC*
 
 Status: `IDEA` · `PLANNING` · `IN_PROGRESS` · `BLOCKED` · `DONE` · `DEFERRED` · `CANCELLED`
 
@@ -43,3 +43,4 @@ Status: `IDEA` · `PLANNING` · `IN_PROGRESS` · `BLOCKED` · `DONE` · `DEFERRE
 
 | ID | Title | Status | Design | Open Tasks |
 | --- | --- | --- | --- | --- |
+| [A001](actions/A001-uptime-prober-connectivity-self-check.md) | uptime-wisp should verify its own connectivity before declaring a target down | IDEA | — | TBD |

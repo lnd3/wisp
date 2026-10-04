@@ -46,3 +46,4 @@ Format: `YYYY-MM-DD | ID | old_status → new_status | note`
 2026-10-02 | P001 | IN_PROGRESS → IN_PROGRESS | Session wrap: five products live, first closed day in; uptime-wisp live; image-shipping deploys; bh2 at 62%. Ticked done: build-vs-adopt, hash inputs, product wiring, bot filtering
 2026-10-02 | P001 | IN_PROGRESS → IN_PROGRESS | uptime-wisp heartbeat deferred (user checks the status page personally)
 2026-10-02 | P001 | IN_PROGRESS → IN_PROGRESS | Deferred: product image-shipping rollout, Issues-log persistence, D002 leftovers; bh2 stale images already gone (60%)
+2026-10-04 | A001 | NEW → IDEA | Filed from a real EphemNet-reported incident: uptime-wisp (on rbserver1) has no way to tell its own connectivity is degraded apart from its targets being down, risking false-negative mass alerts on a shared flaky uplink (Starlink)
