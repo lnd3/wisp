@@ -17,7 +17,6 @@
 
     { "name": "cinderapps.org",      "type": "http", "url": "https://cinderapps.org/" },
     { "name": "cindernote",          "type": "http", "url": "https://noteshare.cinderapps.org/" },
-    { "name": "cindertunnel",        "type": "http", "url": "https://tunnelapp.cinderapps.org/" },
     { "name": "vigil",               "type": "http", "url": "https://vigil.cinderapps.org/" },
 
     { "name": "eph.network",         "type": "http", "url": "https://eph.network/" },
