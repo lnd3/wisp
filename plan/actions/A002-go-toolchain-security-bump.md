@@ -1,7 +1,7 @@
 ---
 id: A002
 title: Go toolchain security bump — build everything with go1.26.10
-status: IN_PROGRESS
+status: DONE
 project: P001
 created: 2026-10-22
 updated: 2026-10-22
@@ -64,3 +64,10 @@ Rebuild and redeploy everything:
 
 2026-10-22 — Filed from I001 with the user's go-ahead; code changes
 made and tested.
+
+2026-10-22 — Deployed and verified: `go version` on each running
+binary says go1.26.10. That covers wisp on bh2 (build 5fb734d),
+health-wisp on bh2, bh3 and rbserver1, and uptime-wisp on rbserver1
+(healthy, 16 checks, no alerts). The dev machine's default `go` on
+PATH is still go1.23.4, and the deploy guards now refuse it: put
+`~/sdk/go1.26.10/bin` first.
