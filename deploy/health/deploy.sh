@@ -121,8 +121,22 @@ git diff --quiet -- health cmd/health-wisp deploy/health || GIT_REV="$GIT_REV-di
 IMAGE="health-wisp:$GIT_REV"
 STAGING="$(mktemp -d)"
 trap 'rm -rf "$STAGING"' EXIT
+# Build with the Go named on go.mod's toolchain line or newer, never an
+# older one left on PATH: GOTOOLCHAIN=local stops the go command from
+# downloading a toolchain itself, and the built binary is checked.
+export GOTOOLCHAIN=local
+check_toolchain() {
+	local want got
+	want="$(awk '$1 == "toolchain" { sub(/^go/, "", $2); print $2 }' go.mod)"
+	got="$(go version "$1" | awk '{ sub(/^go/, "", $2); print $2 }')"
+	if [ -z "$want" ] || [ "$(printf '%s\n%s\n' "$want" "$got" | sort -V | head -1)" != "$want" ]; then
+		echo "ERROR: built with Go $got, but go.mod wants $want or newer — put that Go first on PATH." >&2
+		exit 1
+	fi
+}
 echo "==> Building $IMAGE for linux/$GOARCH (locally)..."
 CGO_ENABLED=0 GOOS=linux GOARCH=$GOARCH go build -trimpath -ldflags="-s -w" -o "$STAGING/health-wisp" ./cmd/health-wisp
+check_toolchain "$STAGING/health-wisp"
 docker build -q --platform "linux/$GOARCH" -f deploy/health/Dockerfile -t "$IMAGE" "$STAGING" >/dev/null
 
 avail_mb="$(ssh "$TARGET" "df --output=avail -BM '$REMOTE_DIR' | tail -1 | tr -dc 0-9")"

@@ -7,11 +7,12 @@
 # The build stage runs on the build machine's own platform and
 # cross-compiles for the target (Go needs no emulation, and the SQLite
 # driver is pure Go, so CGO stays off); only the tiny final layer is
-# per-architecture. golang:1.24 pins the toolchain, so the result
-# doesn't depend on whichever Go the dev machine has installed.
+# per-architecture. golang:1.26.10 pins the toolchain (keep it in step
+# with go.mod's toolchain line), so the result doesn't depend on
+# whichever Go the dev machine has installed.
 #
 #   docker build --platform linux/amd64 -f deploy/wisp/Dockerfile -t wisp:test .
-FROM --platform=$BUILDPLATFORM golang:1.24 AS build
+FROM --platform=$BUILDPLATFORM golang:1.26.10 AS build
 ARG TARGETOS TARGETARCH
 WORKDIR /src
 COPY go.mod go.sum ./

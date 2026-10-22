@@ -44,3 +44,7 @@ cross-repo notification convention `cinder`/`offgrid` already have.)
 
 2026-10-22 — Sent, right after EphemNet's own bump shipped to dev and
 live and A022 was filed.
+
+2026-10-22 — Read by wisp; acted on in A002, which targets go1.26.10.
+1.26.9 already has GO-2026-6809 after it, and health-wisp/uptime-wisp
+were found built with go1.23.4 from PATH.

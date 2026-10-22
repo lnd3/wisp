@@ -118,9 +118,23 @@ fi
 
 STAGING="$(mktemp -d)"
 trap 'rm -rf "$STAGING"' EXIT
+# Build with the Go named on go.mod's toolchain line or newer, never an
+# older one left on PATH: GOTOOLCHAIN=local stops the go command from
+# downloading a toolchain itself, and the built binary is checked.
+export GOTOOLCHAIN=local
+check_toolchain() {
+	local want got
+	want="$(awk '$1 == "toolchain" { sub(/^go/, "", $2); print $2 }' go.mod)"
+	got="$(go version "$1" | awk '{ sub(/^go/, "", $2); print $2 }')"
+	if [ -z "$want" ] || [ "$(printf '%s\n%s\n' "$want" "$got" | sort -V | head -1)" != "$want" ]; then
+		echo "ERROR: built with Go $got, but go.mod wants $want or newer — put that Go first on PATH." >&2
+		exit 1
+	fi
+}
 echo "==> Building uptime-wisp for linux/$GOARCH..."
 CGO_ENABLED=0 GOOS=linux GOARCH=$GOARCH ${GOARM:+GOARM=$GOARM} \
 	go build -trimpath -ldflags="-s -w" -o "$STAGING/uptime-wisp" ./cmd/uptime-wisp
+check_toolchain "$STAGING/uptime-wisp"
 cp deploy/uptime/Dockerfile deploy/uptime/docker-compose.yml deploy/uptime/config.example.json "$STAGING/"
 
 echo "==> Validating the host's config.json with this build..."

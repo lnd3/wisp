@@ -1,6 +1,6 @@
 # wisp Plan Index
 
-*Last updated: 2026-10-22 10:20:26 UTC*
+*Last updated: 2026-10-22 13:00:18 UTC*
 
 Status: `IDEA` · `PLANNING` · `IN_PROGRESS` · `BLOCKED` · `DONE` · `DEFERRED` · `CANCELLED`
 
@@ -44,6 +44,7 @@ Status: `IDEA` · `PLANNING` · `IN_PROGRESS` · `BLOCKED` · `DONE` · `DEFERRE
 | ID | Title | Status | Design | Open Tasks |
 | --- | --- | --- | --- | --- |
 | [A001](actions/A001-uptime-prober-connectivity-self-check.md) | uptime-wisp should verify its own connectivity before declaring a target down | DONE | — | TBD |
+| [A002](actions/A002-go-toolchain-security-bump.md) | Go toolchain security bump — build everything with go1.26.10 | IN_PROGRESS | — | TBD |
 
 ---
 
