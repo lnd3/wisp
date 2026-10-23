@@ -4,7 +4,7 @@ title: Sensitive-information audit of the public repo
 status: DONE
 project: P001
 created: 2026-10-22
-updated: 2026-10-22
+updated: 2026-10-23
 ---
 
 ## Why
@@ -37,6 +37,19 @@ auto mode blocked them as credential materialization. With gitleaks
 and the pattern search clean, a match is very unlikely. If it's ever
 wanted: run a per-server comparison that prints only a match count.
 
+## Correction (2026-10-23): one real secret was public
+
+The **ntfy alert topic** was in FOCUS.md and twice in P001, pushed since
+2026-10-01. The searches missed it because they matched `ntfy.sh/<topic>`
+URLs, not a bare topic name in backticks. An ntfy.sh topic is the whole
+credential: anyone who has it can subscribe (and read the check names
+and URLs in every alert) or publish fake alerts. Removed from the
+current files on 2026-10-23, but it stays in history (commits eecc55d
+and 6d77e42) and in the proxy's copies. The only fix is a new topic,
+which means changing the user's phone subscription: the user's call,
+offered at the wrap. Lesson: also search for each secret's *name*
+("topic", "password", "token") and read the hits, not just shapes.
+
 ## Findings: public, not secret (accepted by the user)
 
 1. **Author email:** every locally made commit carries the author's
@@ -60,3 +73,6 @@ gitignored or server-only files.
 ## Log
 
 2026-10-22 — Audit run and written up; findings accepted as is.
+
+2026-10-23 — Correction: the ntfy topic was public in plan files; removed
+from the current tree, rotation offered to the user.

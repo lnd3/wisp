@@ -52,3 +52,4 @@ Format: `YYYY-MM-DD | ID | old_status → new_status | note`
 2026-10-22 | A002 | NEW → IN_PROGRESS | Go toolchain security bump from inbox I001: go 1.25.0 + toolchain go1.26.10, golang:1.26.10, deploy guards; govulncheck clean
 2026-10-22 | A002 | IN_PROGRESS → DONE | Deployed: wisp (bh2), health-wisp (bh2/bh3/rbserver1), uptime-wisp (rbserver1) all verified go1.26.10
 2026-10-22 | A003 | NEW → DONE | Sensitive-information audit: gitleaks + history grep clean; author email, server IPs, ops detail public but accepted by user
+2026-10-23 | A003 | DONE → DONE | Correction: ntfy alert topic was public in plan files since 2026-10-01; removed from the tree, rotation offered to the user

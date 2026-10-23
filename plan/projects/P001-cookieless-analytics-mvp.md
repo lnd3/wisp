@@ -153,7 +153,7 @@ full technical design.
       deploy (cross-compiles, validates the host config before
       replacing the running prober)
 - [x] Deployed on `rbserver1` at `/opt/uptime-wisp` (2026-10-01):
-      14 checks, all up; alerts to ntfy topic `lnd_bh2_alerts_84af2f`
+      14 checks, all up; alerts to ntfy (topic kept only in the host config)
       (test alert confirmed delivered); status page `rbserver1.lan:8080`
 - [x] ~~Optional: `heartbeat` to a third-party dead-man service~~
       **Deferred 2026-10-02 (user):** "I'm still checking it personally,
@@ -435,7 +435,7 @@ exactly what this item requires:
 2026-10-01 (later) — **uptime-wisp live on `rbserver1`**
 (`/opt/uptime-wisp`, after the user renamed the old directory).
 - **Config:** written on the host only (0600), with the user's ntfy
-  topic `lnd_bh2_alerts_84af2f`.
+  topic (kept only in the host config).
 - **State:** healthy, 0 restarts, 25.9 MB image on arm64. All 14
   checks up.
 - **Alerts:** a `-test-alert` was confirmed on the topic via ntfy's
@@ -664,5 +664,26 @@ added the EphemNet zones entry themselves).
   EphemNet was told about the corrected incident cause.
 - **cinder moved its live stack to bh3** (cinder A026). cinderapps
   keeps reporting to wisp, and all 19 uptime checks are up.
+
+Next is in FOCUS.md.
+
+2026-10-23 — **Session wrap (2026-10-12 to 2026-10-23).**
+- **Registry:** retired cindertransfer and cinderchat removed from
+  wisp's registry on bh2 (they never sent data: no staging, no stats
+  rows) and from uptime-wisp's checks (now 16). Dropped from the
+  example config too, with cindertunnel.
+- **Landing page:** links to the source on GitHub (live, build 5fb734d
+  onwards).
+- **lplan** bumped to 0bf74cc.
+- **rbserver1 power cut (2026-10-21):** uptime-wisp stayed "Exited
+  (255)" despite its restart policy; brought back with
+  `docker compose up -d`.
+- **Go security bump (A002, from EphemNet's inbox I001):** go1.26.10
+  everywhere, verified on every running binary. health-wisp and
+  uptime-wisp had been built with the dev machine's go1.23.4.
+- **Sensitive-information audit (A003):** no leaked credentials found
+  by gitleaks or the history search, but at the wrap the ntfy alert
+  topic turned up as plain text in plan files. It's now removed from the
+  tree. Rotating it is the user's call.
 
 Next is in FOCUS.md.
